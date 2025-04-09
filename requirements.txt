@@ -1,0 +1,7 @@
+pymongo
+bcrypt
+requests
+pyotp
+python-dotenv
+ffmpeg-python
+Flask
