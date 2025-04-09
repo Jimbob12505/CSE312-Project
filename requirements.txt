@@ -4,4 +4,4 @@ requests
 pyotp
 python-dotenv
 ffmpeg-python
-Flask
+flask
