@@ -1,7 +1,6 @@
-pymongo
-bcrypt
-requests
-pyotp
-python-dotenv
-ffmpeg-python
 flask
+flask-socketio
+eventlet
+pymongo
+python-dotenv
+bcrypt
