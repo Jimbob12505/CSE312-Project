@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-const RegisterPage: React.FC = () => {
+export default function Register() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -85,5 +85,3 @@ const RegisterPage: React.FC = () => {
     </div>
   );
 };
-
-export const Component = RegisterPage;

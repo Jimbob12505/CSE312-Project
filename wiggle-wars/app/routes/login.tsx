@@ -1,16 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-const LoginPage: React.FC = () => {
+export default function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     const payload = `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
-
     try {
       const response = await fetch('/login', {
         method: 'POST',
@@ -19,12 +17,7 @@ const LoginPage: React.FC = () => {
         },
         body: payload,
       });
-
-      if (!response.ok) {
-        throw new Error('Login failed');
-      }
-
-      // Handle successful login
+      if (!response.ok) throw new Error('Login failed');
       console.log('Login successful');
     } catch (error) {
       console.error(error);
@@ -60,14 +53,12 @@ const LoginPage: React.FC = () => {
         </button>
         <button
           type="button"
-          className="w-full mt-2 text-blue-500 underline"
           onClick={() => navigate('/register')}
+          className="w-full mt-2 text-blue-500 underline"
         >
           Register
         </button>
       </form>
     </div>
   );
-};
-
-export const Component = LoginPage;
+}
