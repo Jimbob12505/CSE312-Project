@@ -1,6 +1,7 @@
 {
   "name": "wiggle-wars",
   "private": true,
+  "proxy":"http://localhost:8081/",
   "type": "module",
   "scripts": {
     "build": "react-router build",
