@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Snake Game Login</title>
+    <style>
+      /* Global Styles */
+      body,
+      html {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        font-family: "Arial", sans-serif;
+      }
+      /* Login Overlay Styles */
+      #loginOverlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(to right, #0f2027, #203a43, #2c5364);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10;
+      }
+      .login-box {
+        background: rgba(255, 255, 255, 0.1);
+        padding: 40px 60px;
+        border-radius: 10px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        text-align: center;
+        color: #fff;
+      }
+      .login-box h2 {
+        margin-bottom: 20px;
+      }
+      .login-box input[type="text"] {
+        width: 80%;
+        padding: 10px;
+        margin-bottom: 20px;
+        border: none;
+        border-radius: 5px;
+        font-size: 1em;
+      }
+      .login-box button {
+        padding: 10px 20px;
+        font-size: 1em;
+        border: none;
+        border-radius: 5px;
+        background-color: #ff5722;
+        color: #fff;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+      }
+      .login-box button:hover {
+        background-color: #e64a19;
+      }
+      /* Hide the game canvas until login is complete */
+      #gameCanvas {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Login Overlay -->
+    <div id="loginOverlay">
+      <div class="login-box">
+        <h2>Login</h2>
+        <input type="text" id="username" placeholder="Enter username" />
+        <br />
+        <button id="loginBtn">Login</button>
+      </div>
+    </div>
+
+    <!-- Game Canvas -->
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+      // Handle Login: when the login button is clicked, hide the overlay and start the game
+      document
+        .getElementById("loginBtn")
+        .addEventListener("click", function () {
+          const username = document.getElementById("username").value;
+          if (username.trim() === "") {
+            alert("Please enter your username");
+            return;
+          }
+          // Hide the login overlay and show the game canvas
+          document.getElementById("loginOverlay").style.display = "none";
+          document.getElementById("gameCanvas").style.display = "block";
+          console.log("Logged in as:", username);
+          // Start the snake game
+          startGame();
+        });
+
+      // --- Snake Game Code ---
+
+      // Get the canvas and context, then set the canvas dimensions
+      const canvas = document.getElementById("gameCanvas");
+      const ctx = canvas.getContext("2d");
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+
+      // Define the snake object with initial properties
+      let snake = {
+        x: canvas.width / 2,
+        y: canvas.height / 2,
+        radius: 10,
+        speed: 2, // Slower speed for smoother motion
+        angle: 0,
+        segments: [],
+        maxLength: 20, // Starting length (number of segments)
+      };
+
+      // Initialize snake segments with the starting position
+      for (let i = 0; i < snake.maxLength; i++) {
+        snake.segments.push({ x: snake.x, y: snake.y });
+      }
+
+      // Array to hold food items
+      let foods = [];
+      // Function to spawn a food item at a random position on the canvas
+      function spawnFood() {
+        const food = {
+          x: Math.random() * canvas.width,
+          y: Math.random() * canvas.height,
+          radius: 5, // Size of the food
+        };
+        foods.push(food);
+      }
+      // Spawn initial food items
+      for (let i = 0; i < 10; i++) {
+        spawnFood();
+      }
+      // Continue spawning food every 1 second
+      setInterval(spawnFood, 1000);
+
+      // Function to increase the snake's length when food is eaten
+      function growSnake() {
+        snake.maxLength += 1;
+      }
+
+      // Update the game state: move snake and check collisions with food
+      function update() {
+        // Move the snake's head
+        snake.x += Math.cos(snake.angle) * snake.speed;
+        snake.y += Math.sin(snake.angle) * snake.speed;
+
+        // Wrap around the screen
+        if (snake.x > canvas.width) snake.x = 0;
+        if (snake.x < 0) snake.x = canvas.width;
+        if (snake.y > canvas.height) snake.y = 0;
+        if (snake.y < 0) snake.y = canvas.height;
+
+        // Add new head position
+        snake.segments.unshift({ x: snake.x, y: snake.y });
+        // Keep the segments within maxLength
+        if (snake.segments.length > snake.maxLength) {
+          snake.segments.pop();
+        }
+
+        // Check collision between snake's head and food items
+        for (let i = foods.length - 1; i >= 0; i--) {
+          const food = foods[i];
+          const dx = snake.x - food.x;
+          const dy = snake.y - food.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          if (distance < snake.radius + food.radius) {
+            // ***** SNAKE GROWTH SECTION START *****
+            foods.splice(i, 1); // Remove the eaten food
+            growSnake(); // Increase snake length
+            // ***** SNAKE GROWTH SECTION END *****
+          }
+        }
+      }
+
+      // Draw snake and food on the canvas
+      function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // Draw snake segments (body)
+        ctx.fillStyle = "#00FF00";
+        for (const seg of snake.segments) {
+          ctx.beginPath();
+          ctx.arc(seg.x, seg.y, snake.radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // Draw food items as red circles
+        ctx.fillStyle = "#FF0000";
+        for (const food of foods) {
+          ctx.beginPath();
+          ctx.arc(food.x, food.y, food.radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // Main game loop to update and render the game continuously
+      function gameLoop() {
+        update();
+        draw();
+        requestAnimationFrame(gameLoop);
+      }
+
+      // Start the snake game
+      function startGame() {
+        gameLoop();
+      }
+
+      // Change snake's direction based on mouse movement
+      canvas.addEventListener("mousemove", function (event) {
+        const dx = event.clientX - snake.x;
+        const dy = event.clientY - snake.y;
+        snake.angle = Math.atan2(dy, dx);
+      });
+
+      // Adjust canvas size on window resize
+      window.addEventListener("resize", function () {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+      });
+    </script>
+  </body>
+</html>

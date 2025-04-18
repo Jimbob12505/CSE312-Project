@@ -1,0 +1,76 @@
+body {
+  margin: 0;
+  padding: 0;
+  background: #0f0f0f;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  font-family: sans-serif;
+  overflow: hidden; /* 🔹 Prevent scrolling */
+}
+
+.portal-container {
+  height: 100vh; /* 🔹 Full viewport height */
+  width: 100vw; /* 🔹 Full viewport width */
+  text-align: center;
+}
+
+.portal-image {
+  width: 100%; /* 🔹 Full responsive width */
+  height: auto; /* 🔹 Maintain aspect ratio */
+  box-shadow: 0 0 30px rgba(0, 255, 0, 0.4);
+  object-fit: cover; /* 🔹 Cover screen completely */
+}
+
+.button-row {
+  display: flex;
+  justify-content: center; /* 🔹 Center horizontally */
+  gap: 20px; /* 🔹 Space between buttons */
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+/* 🔹 Adjusted buttons to take equal space */
+.enter-button {
+  flex: 1 1 45%; /* 🔹 Responsive grow/shrink with min width */
+  text-align: center;
+  padding: 12px 0;
+  background-color: #00ff00;
+  color: black;
+  font-size: 1.2em;
+  border-radius: 10px;
+  text-decoration: none;
+  transition: 0.3s;
+  min-width: 120px;
+}
+
+/* Optional: align buttons distinctly if needed */
+.left-button {
+  background-color: #007bff;
+}
+
+.right-button {
+  background-color: #00ff00;
+}
+
+.left-button:hover {
+  background-color: #005dc1;
+  box-shadow: 0 0 15px #007bff;
+}
+
+.right-button:hover {
+  background-color: #00cc00;
+  box-shadow: 0 0 15px #00ff00;
+}
+.button-overlay {
+  position: absolute;
+  top: 50%; /* 🔹 Center vertically */
+  left: 50%; /* 🔹 Center horizontally */
+  transform: translate(-50%, -50%); /* 🔹 Exact centering */
+
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
