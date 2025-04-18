@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Register Account</title>
+    <style>
+      body {
+        background-image: url(./login_background.png);
+        background-size: cover;
+        background-repeat: no-repeat;
+      }
+      form {
+        max-width: 400px;
+        height: 450px;
+        background-color: white;
+        border: 1px solid;
+        margin: 100px auto;
+        color: black;
+        border-radius: 5px;
+        background-color: rgba(247, 247, 247, 0.6);
+        padding: 25px 45px;
+      }
+      div {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        line-height: 35px;
+        margin-top: 15px;
+      }
+      label {
+        margin-bottom: 5px;
+      }
+      input {
+        width: 60%;
+        height: 25px;
+        line-height: 25px;
+        border: 1px solid #dadada;
+        outline: none;
+        font-size: 12px;
+        padding: 3px 3px 3px 5px;
+        border-radius: 5px;
+      }
+      input[type="submit"] {
+        width: 50%;
+        height: 40px;
+        line-height: 15px;
+        font-size: 15px;
+        background-color: #008f5a;
+        font-weight: bold;
+
+        box-shadow: 0 0 6px #008b8b;
+        position: relative;
+        left: 50%;
+        transform: translateX(-50%);
+      }
+      input[type="submit"]:hover {
+        cursor: pointer;
+        background-color: #008b8b;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Add login link-->
+    <form action="#">
+      <h1 style="text-align: center">Register</h1>
+      <div>
+        <label for="username">Username</label>
+
+        <input type="text" id="username" required />
+      </div>
+
+      <div>
+        <label for="pwd">Password</label>
+
+        <input type="password" id="pwd" required />
+      </div>
+      <div>
+        <label for="pwd">Password</label>
+        <input type="password" id="pwd" required />
+        <a href="./login.html">Sign in</a>
+      </div>
+      <div>
+        <!-- Sign in button-->
+        <input type="submit" value="Create account" /> <br />
+      </div>
+      <!-- Link for forgot account to be added
+      <a href="#">Forgot Password?</a> <br />
+      -->
+    </form>
+  </body>
+</html>
