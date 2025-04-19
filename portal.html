@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>CSE 312 Slither</title>
+    <style>
+      body {
+        background: url("./portal.png") no-repeat center center fixed;
+        background-size: cover;
+        background-repeat: no-repeat;
+      }
+
+      .button {
+        display: flex;
+        gap: 100px;
+        align-items: center;
+        justify-content: center;
+        margin-top: 75vh;
+      }
+
+      a button {
+        padding: 12px 24px;
+        font-size: 18px;
+        border: none;
+        border-radius: 8px;
+        background-color: #ffffffcc;
+        color: #000;
+        transition: background-color 0.3s ease;
+      }
+
+      a button:hover {
+        background-color: #eee;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="button">
+      <a href="#"><button>Proceed as Guest</button></a>
+      <a href="./login.html"><button>Login</button></a>
+    </div>
+  </body>
+</html>
