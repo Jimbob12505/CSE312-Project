@@ -1,7 +1,0 @@
-pymongo
-bcrypt
-requests
-pyotp
-python-dotenv
-ffmpeg-python
-flask
