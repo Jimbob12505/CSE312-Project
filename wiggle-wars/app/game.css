@@ -1,0 +1,74 @@
+.game-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+  
+  .navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem;
+    background-color: #AF46A3;
+    color: white;
+  }
+  
+  .avatar {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background-color: #D782CF;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .player-name {
+    font-size: 1.25rem;
+    font-weight: bold;
+  }
+  
+  .sign-in-button {
+    background-color: #06B4DB;
+    padding: 0.5rem 1.5rem;
+    border-radius: 9999px;
+    transition: background-color 0.3s;
+  }
+  
+  .sign-in-button:hover {
+    background-color: #24D2F9;
+  }
+  
+  .content {
+    display: flex;
+    flex: 1;
+  }
+  
+  .leaderboard {
+    width: 176px;
+    background-color: #AF46A3;
+    color: white;
+    overflow-y: auto;
+  }
+  
+  .scoreboard-header {
+    background-color: #06B4DB;
+    padding: 0.5rem;
+  }
+  
+  .scoreboard-title {
+    font-weight: bold;
+  }
+  
+  .player-list {
+    padding: 1rem;
+  }
+  
+  .player-item {
+    padding: 0.25rem 0;
+  }
+  
+  .game-area {
+    flex: 1;
+    background-color: white;
+  }
