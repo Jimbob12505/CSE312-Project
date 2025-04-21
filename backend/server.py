@@ -1,25 +1,20 @@
-from flask import Flask
-import datetime
+from flask import Flask, send_from_directory
+import os
 
-x = datetime.datetime.now()
+app = Flask(__name__, static_folder='../wiggle-wars/dist', static_url_path='')
 
-# Initializing flask app
-app = Flask(__name__)
+@app.route('/')
+@app.route('/<path:path>')
+def serve(path='index.html'):
+    if os.path.exists(os.path.join(app.static_folder, path)):
+        return send_from_directory(app.static_folder, path)
+    else:
+        return send_from_directory(app.static_folder, 'index.html')
 
+# You can still define API routes as usual
+@app.route('/api/hello')
+def hello():
+    return {'message': 'Hi from Flask!'}
 
-# Route for seeing a data
-@app.route('/data')
-def get_time():
-
-    # Returning an api for showing in  reactjs
-    return {
-        'Name':"geek", 
-        "Age":"22",
-        "Date":x, 
-        "programming":"python"
-        }
-
-    
-# Running app
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port = 8081, debug=True)
+    app.run(host="0.0.0.0", port="8080", debug=True)

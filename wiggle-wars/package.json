@@ -1,13 +1,12 @@
 {
   "name": "wiggle-wars",
   "private": true,
-  "proxy":"http://localhost:8081/",
+  "proxy": "http://localhost:8080/",
   "type": "module",
   "scripts": {
-    "build": "react-router build",
-    "dev": "react-router dev",
-    "start": "react-router-serve ./build/server/index.js",
-    "typecheck": "react-router typegen && tsc"
+    "build": "vite build",
+    "dev": "vite",
+    "start": "python3 ../backend/server.py"
   },
   "dependencies": {
     "@react-router/node": "^7.5.0",
@@ -15,7 +14,8 @@
     "isbot": "^5.1.17",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-router": "^7.5.0"
+    "react-router": "^7.5.0",
+    "react-router-dom": "^7.5.1"
   },
   "devDependencies": {
     "@react-router/dev": "^7.5.0",
@@ -23,6 +23,7 @@
     "@types/node": "^20",
     "@types/react": "^19.0.1",
     "@types/react-dom": "^19.0.1",
+    "@vitejs/plugin-react": "^4.4.1",
     "react-router-devtools": "^1.1.0",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.7.2",
