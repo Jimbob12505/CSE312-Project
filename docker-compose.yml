@@ -1,0 +1,37 @@
+
+version: "3.8"
+
+services:
+  mongo:
+    image: mongo:4.2.5
+    restart: always
+    volumes:
+      - mongo_data:/data/db
+    ports:
+      - "27017:27017"
+
+  backend:
+    build: ./backend
+    # mimic your homework example
+    environment:
+      WAIT_HOSTS: mongo:27017
+      DOCKER_DB: "true"
+      MONGO_URI: mongodb://mongo:27017/slither
+    depends_on:
+      - mongo
+    volumes:
+      - ./logs:/app/logs
+      - ./backend/wait-for-it.sh:/app/wait-for-it.sh:ro
+    ports:
+      - "5000:5000"
+    entrypoint: ["./wait-for-it.sh", "mongo:27017", "--", "gunicorn", "-b", "0.0.0.0:5000", "app:app"]
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - "8080:3000"
+
+volumes:
+  mongo_data:
