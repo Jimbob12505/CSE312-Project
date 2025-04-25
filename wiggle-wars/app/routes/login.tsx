@@ -11,7 +11,7 @@ export default function Login() {
     e.preventDefault();
     const payload = `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
     try {
-      const response = await fetch('/login', {
+      const response = await fetch('/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
