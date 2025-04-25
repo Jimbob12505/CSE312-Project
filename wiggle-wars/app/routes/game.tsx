@@ -20,8 +20,21 @@ export default function Game() {
   ]);
   const navigate = useNavigate();
 
-  const handleLogout = () => {
-    navigate('/login');
+  const handleLogout = async () => {
+    try {
+      const response = await fetch('/auth/login', {
+        method: 'GET',
+      });
+
+      if (!response.ok)
+        console.log('Logout failed');
+
+      navigate('/login');
+    }
+    catch (error) {
+      console.error(error);
+      navigate('/login');
+    }
   };
 
   return (
