@@ -7,6 +7,8 @@ type Point = { x: number; y: number };
 // Food with color and position
 type Food = Point & { color: string };
 
+const otherPlayersRef = useRef<{ x: number; y: number; color: string }[]>([]);
+
 // Generate random hex color
 function randomColor(): string {
   return '#' + Math.floor(Math.random() * 0xFFFFFF).toString(16).padStart(6, '0');
@@ -133,6 +135,22 @@ export default function Game() {
         ctx.fill();
       }
 
+      otherPlayersRef.current.forEach(p => {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, snakeRadius * 0.8, 0, 2 * Math.PI);
+        ctx.fillStyle = p.color;
+        ctx.fill();
+      });
+
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({
+          messageType: 'move',
+          snake_x:    segs[0].x,
+          snake_y:    segs[0].y,
+          snake_color: snakeColorRef.current
+        }));
+      }
+
       requestAnimationFrame(animate);
     };
     animate();
@@ -160,8 +178,43 @@ export default function Game() {
       const socket = new WebSocket(`${scheme}://${window.location.host}/ws/game`);
       wsRef.current = socket;
 
-      socket.onopen    = () => console.log('WS connected');
-      socket.onmessage = e => { /* … */ };
+      socket.onopen = () => {
+        console.log('WebSocket connected');
+        // send our initial head+color so server can record us
+        const head = segmentsRef.current[0];
+        socket.send(JSON.stringify({
+          messageType: 'join',
+          snake_x: head.x,
+          snake_y: head.y,
+          snake_color: snakeColorRef.current
+        }));
+      };
+      socket.onmessage = evt => {
+        const data = JSON.parse(evt.data);
+
+        if (data.messageType === 'init_location') {
+          // seed all foods and all snakes
+          foodsRef.current = data.foods;
+          otherPlayersRef.current = data.snakes;
+        }
+
+        if (data.messageType === 'move') {
+          // find existing or add new
+          const idx = otherPlayersRef.current.findIndex(p => p.color === data.snake_color);
+          if (idx >= 0) {
+            otherPlayersRef.current[idx].x = data.snake_x;
+            otherPlayersRef.current[idx].y = data.snake_y;
+          } else {
+            otherPlayersRef.current.push({
+              x:     data.snake_x,
+              y:     data.snake_y,
+              color: data.snake_color
+            });
+          }
+        }
+
+        // you can handle further messageTypes (e.g. new_player, move, etc.) here
+      };
       socket.onerror   = e => console.error(e);
       socket.onclose   = () => console.log('WS closed');
 
