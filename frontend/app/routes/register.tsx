@@ -1,87 +1,115 @@
+// src/routes/register.tsx
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
+import '../styles/register.css';
 
 export default function Register() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
 
+    // ← client‐side validation:
     if (password !== confirmPassword) {
-      alert('Passwords do not match');
+      setError('Passwords do not match');
       return;
     }
 
-    const payload = `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
-
     try {
-      const response = await fetch('/register', {
+      const res = await fetch('/api/register', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: payload,
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password, confirmPassword })
       });
 
-      if (!response.ok) {
-        throw new Error('Registration failed');
+      if (res.ok) {
+        navigate('/game');
+      } else {
+        const data = await res.json();
+        setError(data.message || 'Registration failed');
       }
-
-      console.log('Registration successful');
-      navigate('/login');
-    } catch (error) {
-      console.error(error);
+    } catch (err) {
+      console.error(err);
+      setError('Network error');
     }
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4">
-      <form onSubmit={handleSubmit} className="bg-white p-6 rounded-2xl shadow-md w-full max-w-sm">
-        <h2 className="text-xl font-bold mb-4 text-center">Register for a Game Account</h2>
-        <div className="mb-4">
-          <input
-            type="text"
-            placeholder="Username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            required
-            className="w-full p-2 border border-gray-300 rounded"
-          />
+      <div className="login-container">
+        <div className="login-content">
+          <h1 className="login-title">wigglewars.me</h1>
+          <div className="form-container">
+            <div className="form-content">
+              <div className="tab-container">
+                <Link to="/login" className="tab-button inactive">
+                  Login
+                </Link>
+                <Link to="/register" className="tab-button active">
+                  Register
+                </Link>
+              </div>
+
+              {error && <div className="error-message">{error}</div>}
+
+              <form onSubmit={handleSubmit}>
+                <div className="form-field">
+                  <label htmlFor="username" className="form-field-label">
+                    Username
+                  </label>
+                  <input
+                      id="username"
+                      type="text"
+                      className="form-input"
+                      placeholder="Enter your username"
+                      value={username}
+                      onChange={e => setUsername(e.target.value)}
+                      required
+                  />
+                </div>
+
+                <div className="form-field">
+                  <label htmlFor="password" className="form-field-label">
+                    Password
+                  </label>
+                  <input
+                      id="password"
+                      type="password"
+                      className="form-input"
+                      placeholder="Enter your password"
+                      value={password}
+                      onChange={e => setPassword(e.target.value)}
+                      required
+                  />
+                </div>
+
+                <div className="form-field">
+                  <label htmlFor="confirmPassword" className="form-field-label">
+                    Confirm Password
+                  </label>
+                  <input
+                      id="confirmPassword"
+                      type="password"
+                      className="form-input"
+                      placeholder="Re-enter your password"
+                      value={confirmPassword}
+                      onChange={e => setConfirmPassword(e.target.value)}
+                      required
+                  />
+                </div>
+
+                <button type="submit" className="form-submit">
+                  Register
+                </button>
+              </form>
+            </div>
+          </div>
         </div>
-        <div className="mb-4">
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            className="w-full p-2 border border-gray-300 rounded"
-          />
-        </div>
-        <div className="mb-4">
-          <input
-            type="password"
-            placeholder="Confirm Password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            required
-            className="w-full p-2 border border-gray-300 rounded"
-          />
-        </div>
-        <button type="submit" className="w-full bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600">
-          Register
-        </button>
-        <button
-          type="button"
-          className="w-full mt-2 text-blue-500 underline"
-          onClick={() => navigate('/login')}
-        >
-          Back to Login
-        </button>
-      </form>
-    </div>
+      </div>
   );
-};
+}
