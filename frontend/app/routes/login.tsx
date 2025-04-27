@@ -11,6 +11,7 @@ export default function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const payload = `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
+    console.log(payload)
     try {
       const response = await fetch('/auth/login', {
         method: 'POST',
@@ -18,8 +19,13 @@ export default function Login() {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
         body: payload,
+
       });
-      if (!response.ok) throw new Error('Login failed');
+      if (!response.ok){
+        const err = await response.json();
+        throw new Error(err.message || 'Login failed');
+      }
+      const data = await response.json();
       console.log('Login successful');
     } catch (error) {
       console.error(error);
