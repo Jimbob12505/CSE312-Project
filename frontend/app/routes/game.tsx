@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import '../styles/game.css';
 
 // 2D point in pixels
@@ -15,6 +15,14 @@ function randomColor(): string {
 export default function Game() {
   const [playerName] = useState('Playername');
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const [score, setScore]           = useState(0);
+  const [snakeLengthState, setSnakeLengthState] = useState(1);
+
+
+  const wsRef = useRef<WebSocket | null>(null);
+
+  const location = useLocation();
 
   const snakeColorRef = useRef<string>(randomColor());
   // Game config
@@ -98,9 +106,11 @@ export default function Game() {
           };
           // increment eat counter
           eatCountRef.current += 1;
+          setScore(eatCountRef.current);
           // grow one circle when eatCount is multiple of 5
           if (eatCountRef.current % 5 === 0) {
             lengthRef.current += 1;
+            setSnakeLengthState(lengthRef.current);
           }
         }
       });
@@ -144,6 +154,20 @@ export default function Game() {
     canvas.addEventListener('mousemove', onMouseMove);
     return () => canvas.removeEventListener('mousemove', onMouseMove);
   }, []);
+  useEffect(() => {
+    if (location.pathname === '/game') {
+      const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      const socket = new WebSocket(`${scheme}://${window.location.host}/ws/game`);
+      wsRef.current = socket;
+
+      socket.onopen    = () => console.log('WS connected');
+      socket.onmessage = e => { /* … */ };
+      socket.onerror   = e => console.error(e);
+      socket.onclose   = () => console.log('WS closed');
+
+      return () => { socket.close(); };
+    }
+  }, [location.pathname]);
   //
   // leaderboard sample data
   // waiting actual API call
@@ -215,6 +239,10 @@ export default function Game() {
 
         {/* Game Area */}
         <div className="game-area">
+          <div className="game-info">
+            <div>Score: {score}</div>
+            <div>Length: {snakeLengthState}</div>
+          </div>
           <canvas ref={canvasRef} />
         </div>
       </div>
