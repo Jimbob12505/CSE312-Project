@@ -2,111 +2,107 @@ import React, { useRef, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../styles/game.css';
 
-// Grid coordinate
-interface Segment { x: number; y: number; }
-// Food with color
-interface Food extends Segment { color: string; }
+// 2D point in pixels
+type Point = { x: number; y: number };
+// Food with color and position
+type Food = Point & { color: string };
 
-// Generate a random hex color
+// Generate random hex color
 function randomColor(): string {
-  return '#' + Math.floor(Math.random() * 0xFFFFFF)
-      .toString(16)
-      .padStart(6, '0');
-}
-
-// Get a random grid cell not in `occupied`
-function randomCell(cols: number, rows: number, occupied: Segment[]): Segment {
-  let cell: Segment;
-  do {
-    cell = { x: Math.floor(Math.random() * cols), y: Math.floor(Math.random() * rows) };
-  } while (occupied.some(o => o.x === cell.x && o.y === cell.y));
-  return cell;
+  return '#' + Math.floor(Math.random() * 0xFFFFFF).toString(16).padStart(6, '0');
 }
 
 export default function Game() {
   const [playerName] = useState('Playername');
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const cellSize = 40;
-  const foodCount = 50;
+  // Game config
+  const snakeRadius = 18;   // head radius in px
+  const speed = 1;          // px per frame
+  const foodCount = 50;     // number of foods
 
-  // dynamic grid dimensions
-  const [cols, setCols] = useState(0);
-  const [rows, setRows] = useState(0);
+  // Mouse target in pixel coords
+  const targetRef = useRef<Point>({ x: 0, y: 0 });
+  // Snake head position stored in ref
+  const headRef = useRef<Point>({ x: 0, y: 0 });
+  // Foods stored in ref to keep animation loop stable
+  const foodsRef = useRef<Food[]>([]);
+  const [foods, setFoods] = useState<Food[]>([]);
 
-  // snake state (initialized once)
-  const [snake, setSnake] = useState<Segment[]>([]);
-  // foods state (array of colored positions)
-  const [food, setFood] = useState<Food[]>([]);
-
-  // on mount: measure grid, set canvas size, init snake & foods
+  // Initialize canvas, snake, foods, and start animation (runs only once)
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const container = canvas.parentElement!;
-    const c = Math.floor(container.clientWidth  / cellSize);
-    const r = Math.floor(container.clientHeight / cellSize);
-    setCols(c);
-    setRows(r);
-    canvas.width = c * cellSize;
-    canvas.height = r * cellSize;
-
-    // center snake
-    const center: Segment = { x: Math.floor(c / 2), y: Math.floor(r / 2) };
-    setSnake([center]);
-
-    // scatter foods
-    const foods: Food[] = Array.from({ length: foodCount }).map(() => {
-      const cell = randomCell(c, r, [center]);
-      return { ...cell, color: randomColor() };
-    });
-    setFood(foods);
-  }, []);
-
-  // draw loop
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    const parent = canvas.parentElement!;
+    canvas.width = parent.clientWidth;
+    canvas.height = parent.clientHeight;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const render = () => {
+    // start snake at center
+    const start: Point = { x: canvas.width / 2, y: canvas.height / 2 };
+    headRef.current = start;
+    targetRef.current = start;
+
+    // scatter food a single time
+    const foodsArr: Food[] = Array.from({ length: foodCount }).map(() => ({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      color: randomColor(),
+    }));
+    foodsRef.current = foodsArr;
+    setFoods(foodsArr);
+
+    // Animation loop: move head toward target and render
+    const animate = () => {
+      const head = headRef.current;
+      const target = targetRef.current;
+      // compute direction vector
+      const dx = target.x - head.x;
+      const dy = target.y - head.y;
+      const dist = Math.hypot(dx, dy) || 1;
+      const vx = (dx / dist) * speed;
+      const vy = (dy / dist) * speed;
+      // update head position
+      headRef.current = { x: head.x + vx, y: head.y + vy };
+
+      // clear canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // draw snake
-      const snakeRadius = (cellSize * 0.9) / 2;
-      ctx.fillStyle = '#06B4DB';
-      snake.forEach(seg => {
+      // draw foods once scattered
+      foodsRef.current.forEach(f => {
         ctx.beginPath();
-        ctx.arc(
-            seg.x * cellSize + cellSize / 2,
-            seg.y * cellSize + cellSize / 2,
-            snakeRadius,
-            0,
-            2 * Math.PI
-        );
-        ctx.fill();
-      });
-
-      // draw foods
-      const foodRadius = (cellSize * 0.3) / 2;
-      food.forEach(f => {
-        ctx.beginPath();
+        ctx.arc(f.x, f.y, snakeRadius * 0.3, 0, 2 * Math.PI);
         ctx.fillStyle = f.color;
-        ctx.arc(
-            f.x * cellSize + cellSize / 2,
-            f.y * cellSize + cellSize / 2,
-            foodRadius,
-            0,
-            2 * Math.PI
-        );
         ctx.fill();
       });
 
-      requestAnimationFrame(render);
+      // draw snake head only
+      const newHead = headRef.current;
+      ctx.beginPath();
+      ctx.arc(newHead.x, newHead.y, snakeRadius, 0, 2 * Math.PI);
+      ctx.fillStyle = '#06B4DB';
+      ctx.fill();
+
+      requestAnimationFrame(animate);
     };
-    render();
-  }, [snake, food]);
+    requestAnimationFrame(animate);
+  }, []);
+
+  // Track mouse to update target continuously
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const onMouseMove = (e: MouseEvent) => {
+      targetRef.current = {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+      };
+    };
+    canvas.addEventListener('mousemove', onMouseMove);
+    return () => canvas.removeEventListener('mousemove', onMouseMove);
+  }, []);
   //
   // leaderboard sample data
   // waiting actual API call
