@@ -16,6 +16,7 @@ export default function Game() {
   const [playerName] = useState('Playername');
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
+  const snakeColorRef = useRef<string>(randomColor());
   // Game config
   const snakeRadius = 15;       // radius of each circle segment
   const segmentSpacing = snakeRadius * 1.6; // spacing between circles for overlap
@@ -110,13 +111,16 @@ export default function Game() {
         ctx.beginPath(); ctx.arc(f.x, f.y, snakeRadius * 0.3, 0, 2 * Math.PI);
         ctx.fillStyle = f.color; ctx.fill();
       });
-      ctx.fillStyle = '#06B4DB';
+      ctx.fillStyle = snakeColorRef.current;
+
       const segs = segmentsRef.current;
       for (let i = segs.length - 1; i >= 0; i--) {
         const p = segs[i];
         const t = i / segs.length;
         const r = snakeRadius * (1 - 0.3 * t);
-        ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 2 * Math.PI); ctx.fill();
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r, 0, 2 * Math.PI);
+        ctx.fill();
       }
 
       requestAnimationFrame(animate);
