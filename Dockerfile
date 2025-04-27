@@ -5,15 +5,16 @@ WORKDIR /root
 
 COPY ./requirements.txt ./requirements.txt
 COPY ./server.py ./server.py
-COPY ./public ./public
-COPY ./util ./util
+COPY ./database.py ./database.py
+COPY ./frontend/dist ./frontend/dist
+COPY ./backend ./backend
 
 RUN apt update
 RUN apt install ffmpeg -y
 
 RUN pip3 install -r requirements.txt
 
-EXPOSE 8000
+EXPOSE 8080
 
 ADD https://github.com/ufoscout/docker-compose-wait/releases/download/2.2.1/wait /wait
 RUN chmod +x /wait
