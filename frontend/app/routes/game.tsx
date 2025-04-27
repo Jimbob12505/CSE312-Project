@@ -63,6 +63,14 @@ export default function Game() {
       const dir = directionRef.current;
       // move head forward in current direction
       const newHead = { x: head.x + dir.x * speed, y: head.y + dir.y * speed };
+      // ── APPEND THESE LINES TO KEEP THE HEAD INSIDE THE BORDER ──
+      const minX = snakeRadius;
+      const maxX = canvas.width  - snakeRadius;
+      const minY = snakeRadius;
+      const maxY = canvas.height - snakeRadius;
+
+      newHead.x = Math.max(minX, Math.min(maxX, newHead.x));
+      newHead.y = Math.max(minY, Math.min(maxY, newHead.y));
 
       // add new head circle only if beyond spacing
       const lastPos = lastPosRef.current;
