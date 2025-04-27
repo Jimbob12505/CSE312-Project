@@ -3,6 +3,7 @@ import Root from './root';
 import Login from "./routes/login";
 import Register from "./routes/register";
 import Home from './routes/home';
+import Game from './routes/game';
 
 const router: RouteObject[] = [
   {
@@ -11,7 +12,8 @@ const router: RouteObject[] = [
     children: [
       { index: true, element: <Home /> },
       { path: 'login', element: <Login /> },
-      {path: 'register', element: <Register /> }
+      {path: 'register', element: <Register /> },
+      {path: 'game', element: <Game />}
     ]
   }
 ];

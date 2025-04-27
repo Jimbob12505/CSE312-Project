@@ -84,8 +84,6 @@ import "./app.css";
 
 export default function Root() {
   return (
-      <div className="pt-16 p-4 container mx-auto">
-        <Outlet />
-      </div>
+      <Outlet />
   );
 }

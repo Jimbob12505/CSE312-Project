@@ -1,9 +1,113 @@
-import React, { useState, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import '../game.css';
+import '../styles/game.css';
+
+// Grid coordinate
+interface Segment { x: number; y: number; }
+// Food with color
+interface Food extends Segment { color: string; }
+
+// Generate a random hex color
+function randomColor(): string {
+  return '#' + Math.floor(Math.random() * 0xFFFFFF)
+      .toString(16)
+      .padStart(6, '0');
+}
+
+// Get a random grid cell not in `occupied`
+function randomCell(cols: number, rows: number, occupied: Segment[]): Segment {
+  let cell: Segment;
+  do {
+    cell = { x: Math.floor(Math.random() * cols), y: Math.floor(Math.random() * rows) };
+  } while (occupied.some(o => o.x === cell.x && o.y === cell.y));
+  return cell;
+}
 
 export default function Game() {
-  const [playerName, setPlayerName] = useState('Playername');
+  const [playerName] = useState('Playername');
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const cellSize = 40;
+  const foodCount = 50;
+
+  // dynamic grid dimensions
+  const [cols, setCols] = useState(0);
+  const [rows, setRows] = useState(0);
+
+  // snake state (initialized once)
+  const [snake, setSnake] = useState<Segment[]>([]);
+  // foods state (array of colored positions)
+  const [food, setFood] = useState<Food[]>([]);
+
+  // on mount: measure grid, set canvas size, init snake & foods
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const container = canvas.parentElement!;
+    const c = Math.floor(container.clientWidth  / cellSize);
+    const r = Math.floor(container.clientHeight / cellSize);
+    setCols(c);
+    setRows(r);
+    canvas.width = c * cellSize;
+    canvas.height = r * cellSize;
+
+    // center snake
+    const center: Segment = { x: Math.floor(c / 2), y: Math.floor(r / 2) };
+    setSnake([center]);
+
+    // scatter foods
+    const foods: Food[] = Array.from({ length: foodCount }).map(() => {
+      const cell = randomCell(c, r, [center]);
+      return { ...cell, color: randomColor() };
+    });
+    setFood(foods);
+  }, []);
+
+  // draw loop
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const render = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // draw snake
+      const snakeRadius = (cellSize * 0.9) / 2;
+      ctx.fillStyle = '#06B4DB';
+      snake.forEach(seg => {
+        ctx.beginPath();
+        ctx.arc(
+            seg.x * cellSize + cellSize / 2,
+            seg.y * cellSize + cellSize / 2,
+            snakeRadius,
+            0,
+            2 * Math.PI
+        );
+        ctx.fill();
+      });
+
+      // draw foods
+      const foodRadius = (cellSize * 0.3) / 2;
+      food.forEach(f => {
+        ctx.beginPath();
+        ctx.fillStyle = f.color;
+        ctx.arc(
+            f.x * cellSize + cellSize / 2,
+            f.y * cellSize + cellSize / 2,
+            foodRadius,
+            0,
+            2 * Math.PI
+        );
+        ctx.fill();
+      });
+
+      requestAnimationFrame(render);
+    };
+    render();
+  }, [snake, food]);
+  //
   // leaderboard sample data
   // waiting actual API call
   const [leaderboard, setLeaderboard] = useState([
@@ -49,7 +153,7 @@ export default function Game() {
 
         {/* 右侧登录按钮 */}
         <button onClick={handleLogout} className="sign-in-button">
-          Sign In
+          Logout
         </button>
       </header>
 
@@ -74,7 +178,7 @@ export default function Game() {
 
         {/* Game Area */}
         <div className="game-area">
-          {/* 游戏内容将放在这里 */}
+          <canvas ref={canvasRef} />
         </div>
       </div>
     </div>
