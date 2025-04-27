@@ -7,7 +7,7 @@ type Point = { x: number; y: number };
 // Food with color and position
 type Food = Point & { color: string };
 
-const otherPlayersRef = useRef<{ x: number; y: number; color: string }[]>([]);
+
 
 // Generate random hex color
 function randomColor(): string {
@@ -17,7 +17,7 @@ function randomColor(): string {
 export default function Game() {
   const [playerName] = useState('Playername');
   const canvasRef = useRef<HTMLCanvasElement>(null);
-
+  const otherPlayersRef = useRef<{ x: number; y: number; color: string }[]>([]);
   const [score, setScore]           = useState(0);
   const [snakeLengthState, setSnakeLengthState] = useState(1);
 
