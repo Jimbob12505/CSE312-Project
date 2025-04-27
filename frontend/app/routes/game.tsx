@@ -17,19 +17,24 @@ export default function Game() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Game config
-  const snakeRadius = 18;   // head radius in px
-  const speed = 1;          // px per frame
-  const foodCount = 50;     // number of foods
+  const snakeRadius = 15;       // radius of each circle segment
+  const segmentSpacing = snakeRadius * 1.6; // spacing between circles for overlap
+  const speed = 1.5;              // px per frame
+  const foodCount = 100;
 
-  // Mouse target in pixel coords
-  const targetRef = useRef<Point>({ x: 0, y: 0 });
-  // Snake head position stored in ref
-  const headRef = useRef<Point>({ x: 0, y: 0 });
-  // Foods stored in ref to keep animation loop stable
+  // Direction vector for movement (unit vector)
+  const directionRef = useRef<Point>({ x: 1, y: 0 });
+  // Snake segments positions (circle centers)
+  const segmentsRef = useRef<Point[]>([]);
+  // For spacing logic
+  const lastPosRef = useRef<Point>({ x: 0, y: 0 });
+  // Length in circles (initially 1)
+  const lengthRef = useRef<number>(1);
+  // Count of foods eaten
+  const eatCountRef = useRef<number>(0);
+  // Foods
   const foodsRef = useRef<Food[]>([]);
-  const [foods, setFoods] = useState<Food[]>([]);
 
-  // Initialize canvas, snake, foods, and start animation (runs only once)
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -39,66 +44,90 @@ export default function Game() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // start snake at center
+    // initialize head segment
     const start: Point = { x: canvas.width / 2, y: canvas.height / 2 };
-    headRef.current = start;
-    targetRef.current = start;
+    segmentsRef.current = [start];
+    lastPosRef.current = start;
+    // directionRef already set to default
 
-    // scatter food a single time
-    const foodsArr: Food[] = Array.from({ length: foodCount }).map(() => ({
+    // scatter foods once
+    foodsRef.current = Array.from({ length: foodCount }).map(() => ({
       x: Math.random() * canvas.width,
       y: Math.random() * canvas.height,
       color: randomColor(),
     }));
-    foodsRef.current = foodsArr;
-    setFoods(foodsArr);
 
-    // Animation loop: move head toward target and render
+    // animation loop
     const animate = () => {
-      const head = headRef.current;
-      const target = targetRef.current;
-      // compute direction vector
-      const dx = target.x - head.x;
-      const dy = target.y - head.y;
-      const dist = Math.hypot(dx, dy) || 1;
-      const vx = (dx / dist) * speed;
-      const vy = (dy / dist) * speed;
-      // update head position
-      headRef.current = { x: head.x + vx, y: head.y + vy };
+      const head = segmentsRef.current[0];
+      const dir = directionRef.current;
+      // move head forward in current direction
+      const newHead = { x: head.x + dir.x * speed, y: head.y + dir.y * speed };
 
-      // clear canvas
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      // add new head circle only if beyond spacing
+      const lastPos = lastPosRef.current;
+      const dLast = Math.hypot(newHead.x - lastPos.x, newHead.y - lastPos.y);
+      if (dLast >= segmentSpacing) {
+        segmentsRef.current.unshift(newHead);
+        lastPosRef.current = newHead;
+      } else {
+        segmentsRef.current[0] = newHead;
+      }
+      while (segmentsRef.current.length > lengthRef.current) {
+        segmentsRef.current.pop();
+      }
 
-      // draw foods once scattered
-      foodsRef.current.forEach(f => {
-        ctx.beginPath();
-        ctx.arc(f.x, f.y, snakeRadius * 0.3, 0, 2 * Math.PI);
-        ctx.fillStyle = f.color;
-        ctx.fill();
+      // food collision and growth (grow by 1 circle every 5 foods eaten)
+      foodsRef.current.forEach((f, idx) => {
+        const d = Math.hypot(f.x - newHead.x, f.y - newHead.y);
+        if (d < snakeRadius * 1.6) {
+          // respawn this food
+          foodsRef.current[idx] = {
+            x: Math.random() * canvas.width,
+            y: Math.random() * canvas.height,
+            color: randomColor(),
+          };
+          // increment eat counter
+          eatCountRef.current += 1;
+          // grow one circle when eatCount is multiple of 5
+          if (eatCountRef.current % 5 === 0) {
+            lengthRef.current += 1;
+          }
+        }
       });
 
-      // draw snake head only
-      const newHead = headRef.current;
-      ctx.beginPath();
-      ctx.arc(newHead.x, newHead.y, snakeRadius, 0, 2 * Math.PI);
+      // drawing
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      foodsRef.current.forEach(f => {
+        ctx.beginPath(); ctx.arc(f.x, f.y, snakeRadius * 0.3, 0, 2 * Math.PI);
+        ctx.fillStyle = f.color; ctx.fill();
+      });
       ctx.fillStyle = '#06B4DB';
-      ctx.fill();
+      const segs = segmentsRef.current;
+      for (let i = segs.length - 1; i >= 0; i--) {
+        const p = segs[i];
+        const t = i / segs.length;
+        const r = snakeRadius * (1 - 0.3 * t);
+        ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 2 * Math.PI); ctx.fill();
+      }
 
       requestAnimationFrame(animate);
     };
-    requestAnimationFrame(animate);
+    animate();
   }, []);
 
-  // Track mouse to update target continuously
+  // mouse move to update direction continuously
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     const onMouseMove = (e: MouseEvent) => {
-      targetRef.current = {
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top,
-      };
+      // get current head position
+      const head = segmentsRef.current[0];
+      const dx = (e.clientX - rect.left) - head.x;
+      const dy = (e.clientY - rect.top) - head.y;
+      const dist = Math.hypot(dx, dy) || 1;
+      directionRef.current = { x: dx / dist, y: dy / dist };
     };
     canvas.addEventListener('mousemove', onMouseMove);
     return () => canvas.removeEventListener('mousemove', onMouseMove);
