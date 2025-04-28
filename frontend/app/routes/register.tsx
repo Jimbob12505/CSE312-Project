@@ -14,29 +14,39 @@ export default function Register() {
     e.preventDefault();
     setError(null);
 
-    // ← client‐side validation:
+    // Client-side validation
     if (password !== confirmPassword) {
       setError('Passwords do not match');
       return;
     }
 
+    // Prepare form data to match backend expectations
+    const payload = `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
+
     try {
-      const res = await fetch('/api/register', {
+      const response = await fetch('/api/register', {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password, confirmPassword })
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: payload
       });
 
-      if (res.ok) {
-        navigate('/game');
+      if (response.ok) {
+        navigate('/login');
       } else {
-        const data = await res.json();
-        setError(data.message || 'Registration failed');
+        const errorText = await response.text();
+        // 处理特定的密码错误，显示简化的消息
+        if (errorText === "Password invalid") {
+          setError('Password does not meet requirements');
+        } else {
+          setError(errorText || 'Registration failed');
+        }
       }
     } catch (err) {
-      console.error(err);
-      setError('Network error');
+      console.error('Network error:', err);
+      setError('Network error. Please try again.');
     }
   };
 

@@ -15,14 +15,15 @@ function randomColor(): string {
 }
 
 export default function Game() {
-  const [playerName] = useState('Playername');
+  const [playerName, setPlayerName] = useState('');
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const otherPlayersRef = useRef<{ x: number; y: number; color: string }[]>([]);
+  const otherPlayersRef = useRef<{ x: number; y: number; color: string; username?: string }[]>([]);
   const [score, setScore]           = useState(0);
   const [snakeLengthState, setSnakeLengthState] = useState(1);
 
 
   const wsRef = useRef<WebSocket | null>(null);
+  const playerNameRef = useRef<string>('');
 
   const location = useLocation();
 
@@ -45,6 +46,33 @@ export default function Game() {
   const eatCountRef = useRef<number>(0);
   // Foods
   const foodsRef = useRef<Food[]>([]);
+
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      try {
+        const response = await fetch('/api/user/current', {
+          credentials: 'include'
+        });
+        
+        if (response.ok) {
+          const userData = await response.json();
+          setPlayerName(userData.username);
+          playerNameRef.current = userData.username;
+        } else {
+          console.error('Failed to fetch user data');
+          navigate('/login');
+        }
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+      }
+    };
+
+    fetchCurrentUser();
+  }, []);
+
+  useEffect(() => {
+    playerNameRef.current = playerName;
+  }, [playerName]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -123,8 +151,8 @@ export default function Game() {
         ctx.beginPath(); ctx.arc(f.x, f.y, snakeRadius * 0.3, 0, 2 * Math.PI);
         ctx.fillStyle = f.color; ctx.fill();
       });
+    
       ctx.fillStyle = snakeColorRef.current;
-
       const segs = segmentsRef.current;
       for (let i = segs.length - 1; i >= 0; i--) {
         const p = segs[i];
@@ -135,11 +163,41 @@ export default function Game() {
         ctx.fill();
       }
 
+      // username on the snake head
+      if (segs.length > 0 && playerNameRef.current) {
+        const head = segs[0]; 
+        ctx.font = 'bold 14px Arial';
+        ctx.textAlign = 'center';
+        
+        const textY = head.y - snakeRadius - 3;
+        
+        ctx.strokeStyle = 'black';
+        ctx.lineWidth = 3;
+        ctx.strokeText(playerNameRef.current, head.x, textY); 
+        
+        ctx.fillStyle = 'white';
+        ctx.fillText(playerNameRef.current, head.x, textY); 
+      }
+
       otherPlayersRef.current.forEach(p => {
         ctx.beginPath();
         ctx.arc(p.x, p.y, snakeRadius * 0.8, 0, 2 * Math.PI);
         ctx.fillStyle = p.color;
         ctx.fill();
+        
+        if (p.username) {
+          ctx.font = 'bold 14px Arial';
+          ctx.textAlign = 'center';
+          
+          const textY = p.y - snakeRadius - 3;
+          
+          ctx.strokeStyle = 'black';
+          ctx.lineWidth = 3;
+          ctx.strokeText(p.username, p.x, textY);
+          
+          ctx.fillStyle = 'white';
+          ctx.fillText(p.username, p.x, textY);
+        }
       });
 
       if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -147,7 +205,8 @@ export default function Game() {
           messageType: 'move',
           snake_x:    segs[0].x,
           snake_y:    segs[0].y,
-          snake_color: snakeColorRef.current
+          snake_color: snakeColorRef.current,
+          username: playerNameRef.current
         }));
       }
 
@@ -172,6 +231,7 @@ export default function Game() {
     canvas.addEventListener('mousemove', onMouseMove);
     return () => canvas.removeEventListener('mousemove', onMouseMove);
   }, []);
+  
   useEffect(() => {
     if (location.pathname === '/game') {
       const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
@@ -186,7 +246,8 @@ export default function Game() {
           messageType: 'join',
           snake_x: head.x,
           snake_y: head.y,
-          snake_color: snakeColorRef.current
+          snake_color: snakeColorRef.current,
+          username: playerNameRef.current
         }));
       };
       socket.onmessage = evt => {
@@ -204,11 +265,13 @@ export default function Game() {
           if (idx >= 0) {
             otherPlayersRef.current[idx].x = data.snake_x;
             otherPlayersRef.current[idx].y = data.snake_y;
+            otherPlayersRef.current[idx].username = data.username;
           } else {
             otherPlayersRef.current.push({
               x:     data.snake_x,
               y:     data.snake_y,
-              color: data.snake_color
+              color: data.snake_color,
+              username: data.username
             });
           }
         }
@@ -220,8 +283,7 @@ export default function Game() {
 
       return () => { socket.close(); };
     }
-  }, [location.pathname]);
-  //
+  }, [location.pathname, playerName]); 
   // leaderboard sample data
   // waiting actual API call
   const [leaderboard, setLeaderboard] = useState([
@@ -233,14 +295,14 @@ export default function Game() {
     { id: 6, name: 'Player 1', score: 75 },
     { id: 7, name: 'Player 3', score: 70 },
     { id: 8, name: 'asdf', score: 65 },
-    { id: 9, name: '12345', score: 60 },
-    { id: 10, name: 'asdfasdf', score: 55 },
+    { id: 9, name: 'update docker', score: 60 },
+    { id: 10, name: 'asdfasdftest', score: 55 },
   ]);
   const navigate = useNavigate();
 
   const handleLogout = async () => {
     try {
-      const response = await fetch('/auth/login', {
+      const response = await fetch('/auth/logout', {
         method: 'GET',
       });
 

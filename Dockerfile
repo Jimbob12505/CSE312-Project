@@ -1,3 +1,10 @@
+FROM node:20-alpine AS frontend-builder
+WORKDIR /app/frontend
+COPY ./frontend/package*.json ./
+RUN npm ci
+COPY ./frontend ./
+RUN npm run build
+
 FROM python:3.10
 
 ENV HOME /root
@@ -6,7 +13,7 @@ WORKDIR /root
 COPY ./requirements.txt ./requirements.txt
 COPY ./server.py ./server.py
 COPY ./database.py ./database.py
-COPY ./frontend/dist ./frontend/dist
+COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 COPY ./backend ./backend
 
 RUN apt update
