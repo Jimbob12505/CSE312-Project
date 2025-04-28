@@ -9,3 +9,7 @@ services:
       - ./docker-nginx/configs:/etc/nginx/conf.d
       - ./docker-nginx/certs:/etc/letsencrypt
     image: nginx
+  mongo:
+    image: mongo:4.2.5
+    ports:
+      - '27017:27017'
