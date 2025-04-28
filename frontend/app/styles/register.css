@@ -1,0 +1,97 @@
+.login-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: #AF46A3;
+}
+
+.login-content {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.login-title {
+  font-size: 4.5rem;
+  font-weight: bold;
+  color: white;
+  margin-bottom: 2rem;
+  letter-spacing: 0.05em;
+  font-family: 'Audiowide', 'Orbitron', cursive;
+  text-shadow: 0 0 10px rgba(6, 180, 219, 0.7), 0 0 20px rgba(6, 180, 219, 0.5);
+}
+
+.form-container {
+  width: 100%;
+  max-width: 28rem;
+  background-color: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.form-content {
+  padding: 2rem;
+}
+
+.tab-container {
+  display: flex;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.tab-button {
+  padding: 0.5rem 1rem;
+  padding-bottom: 0.5rem;
+}
+
+.tab-button.active {
+  border-bottom: 2px solid #06B4DB;
+  color: #06B4DB;
+  font-weight: bold;
+}
+
+.tab-button.inactive {
+  color: #a0aec0;
+}
+
+.form-field {
+  margin-bottom: 1rem;
+}
+
+.form-field-label {
+  display: block;
+  color: #4a5568;
+  font-size: 0.875rem;
+  font-weight: bold;
+  margin-bottom: 0.5rem;
+}
+
+.form-input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.25rem;
+}
+
+.form-input:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(6, 180, 219, 0.2);
+}
+
+.form-submit {
+  width: 100%;
+  background-color: #06B4DB;
+  color: white;
+  font-weight: bold;
+  padding: 0.75rem 1rem;
+  border-radius: 9999px;
+  transition: background-color 0.3s;
+}
+
+.form-submit:hover {
+  background-color: #24D2F9;
+}
