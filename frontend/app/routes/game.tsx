@@ -186,12 +186,15 @@ export default function Game() {
           messageType: 'join',
           snake_x: head.x,
           snake_y: head.y,
-          snake_color: snakeColorRef.current
+          snake_color: snakeColorRef.current,
+          name: playerName
         }));
       };
       socket.onmessage = evt => {
         const data = JSON.parse(evt.data);
-
+        if (data.messageType === 'leaderboard') {
+          setLeaderboard(data.leaderboard.slice(0, 10));
+        }
         if (data.messageType === 'init_location') {
           // seed all foods and all snakes
           foodsRef.current = data.foods;
@@ -212,6 +215,11 @@ export default function Game() {
             });
           }
         }
+        if (data.messageType === 'food_update') {
+          // patch that one food pellet
+          const { foodIndex, x, y, color } = data;
+          foodsRef.current[foodIndex] = { x, y, color };
+        }
 
         // you can handle further messageTypes (e.g. new_player, move, etc.) here
       };
@@ -224,19 +232,8 @@ export default function Game() {
   //
   // leaderboard sample data
   // waiting actual API call
-  const [leaderboard, setLeaderboard] = useState([
-    { id: 1, name: 'Bob', score: 120 },
-    { id: 2, name: 'Alice', score: 115 },
-    { id: 3, name: 'Jimmy', score: 100 },
-    { id: 4, name: 'Sarah', score: 95 },
-    { id: 5, name: 'Player 2', score: 80 },
-    { id: 6, name: 'Player 1', score: 75 },
-    { id: 7, name: 'Player 3', score: 70 },
-    { id: 8, name: 'asdf', score: 65 },
-    { id: 9, name: '12345', score: 60 },
-    { id: 10, name: 'asdfasdf', score: 55 },
-  ]);
   const navigate = useNavigate();
+  const [leaderboard, setLeaderboard] = useState<{ name: string; score: number }[]>([]);
 
   const handleLogout = async () => {
     try {
@@ -283,9 +280,9 @@ export default function Game() {
           {/* 排行榜列表 */}
           <div className="player-list">
             {leaderboard.map((player, index) => (
-              <div key={player.id} className="player-item">
-                {index + 1}. {player.name}
-              </div>
+                <div key={index} className="player-item">
+                  {index + 1}. {player.name} – {player.score}
+                </div>
             ))}
           </div>
         </div>

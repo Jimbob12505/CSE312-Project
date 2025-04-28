@@ -13,7 +13,7 @@ def register():
         abort(400, "You are already logged-in. One must be logged-out before registering.")
     return render_template("register.html")
 
-@app.route("/login")
+@app.route("/login", methods=["POST"])
 def login():
     if ("auth_token" in request.cookies):
         abort(400, "You are already logged-in. One must be logged-out before logging-in.")
