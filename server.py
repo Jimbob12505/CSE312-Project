@@ -9,8 +9,16 @@ import database as db
 import threading
 import game_websocket as websocket
 
+dist_dir = os.path.join('frontend', 'dist')
+dev_dir = os.path.join('frontend', 'app')
+
+if os.path.exists(dist_dir):
+    static_folder = dist_dir
+else:
+    static_folder = dev_dir
+
 app = Flask(__name__, 
-            static_folder='frontend/dist', 
+            static_folder=static_folder, 
             static_url_path='')
 sock = Sock(app)
 
