@@ -6,7 +6,7 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite",
-    "start": "python3 ../backend/server.py"
+    "start": "python3 ../server.py"
   },
   "dependencies": {
     "@react-router/node": "^7.5.0",

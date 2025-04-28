@@ -32,6 +32,32 @@ def generate_foods(count=100, min_x=20, max_x=CANVAS_WIDTH-20, min_y=20, max_y=C
         }
     return food_items
 
+def generate_leaderboard():
+    if not snake_positions:
+        return []
+    
+    leaderboard = []
+    for snake_id, snake_info in snake_positions.items():
+        leaderboard.append({
+            "id": snake_id,
+            "name": snake_info.get("username", "Anonymous"),
+            "score": snake_info.get("score", 0)
+        })
+    
+    leaderboard.sort(key=lambda x: x["score"], reverse=True)
+    
+    return leaderboard[:10]
+
+def update_and_broadcast_leaderboard():
+    leaderboard = generate_leaderboard()
+    if not leaderboard:
+        return
+    
+    broadcast_to_all({
+        "messageType": "leaderboard_update",
+        "leaderboard": leaderboard
+    })
+
 def spawn_new_foods():
     global food_state
     
@@ -96,6 +122,12 @@ def send_full_state(ws):
         "snakes": snakes_data,
         "foods": foods_data
     }))
+    
+    leaderboard = generate_leaderboard()
+    ws.send(json.dumps({
+        "messageType": "leaderboard_update",
+        "leaderboard": leaderboard
+    }))
 
 food_state = generate_foods(MAX_FOODS)
 
@@ -154,6 +186,14 @@ def handle_game_websocket(ws):
                     "messageType": "snake_joined",
                     "snake": snake_positions[conn_id]
                 }, conn_id)
+                
+                update_and_broadcast_leaderboard()
+                
+                leaderboard = generate_leaderboard()
+                ws.send(json.dumps({
+                    "messageType": "leaderboard_update",
+                    "leaderboard": leaderboard
+                }))
             
             elif message_type == "move":
                 snake_color = data.get("snake_color")
@@ -163,6 +203,12 @@ def handle_game_websocket(ws):
                 segments = data.get("segments", [])
                 score = data.get("score", 0)
                 length = data.get("length", 1)
+                
+                # Check if score changed
+                score_changed = False
+                if conn_id in snake_positions:
+                    old_score = snake_positions[conn_id].get("score", 0)
+                    score_changed = score > old_score
                 
                 snake_positions[conn_id] = {
                     "id": conn_id,
@@ -179,6 +225,10 @@ def handle_game_websocket(ws):
                     "messageType": "snake_update",
                     "snake": snake_positions[conn_id]
                 }, conn_id)
+                
+                # Update leaderboard if score changed
+                if score_changed:
+                    update_and_broadcast_leaderboard()
             
             elif message_type == "eat_food":
                 food_id = data.get("food_id")
@@ -211,4 +261,10 @@ def handle_game_websocket(ws):
             del snake_positions[conn_id]
 
 def init_game_system():
+    # Set up periodic leaderboard updates
+    def schedule_leaderboard_updates():
+        update_and_broadcast_leaderboard()
+        threading.Timer(5.0, schedule_leaderboard_updates).start()
+    
+    threading.Timer(5.0, schedule_leaderboard_updates).start()
     threading.Timer(5.0, spawn_new_foods).start() 

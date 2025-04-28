@@ -24,7 +24,7 @@ export default function Register() {
     const payload = `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
 
     try {
-      const response = await fetch('/api/register', {
+      const response = await fetch('/auth/register', {
         method: 'POST',
         credentials: 'include',
         headers: {
