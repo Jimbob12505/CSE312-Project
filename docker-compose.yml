@@ -1,11 +1,11 @@
 services:
   nginx:
-    image: nginx
     container_name: docker-nginx
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ~/docker-nginx/html:/usr/share/nginx/html
-      - ~/docker-nginx/default.conf:/etc/nginx/conf.d/default.conf
-      - ~/docker-nginx/certs:/etc/letsencrypt
+      - ./docker-nginx/html:/usr/share/nginx/html
+      - ./docker-nginx/configs:/etc/nginx/conf.d
+      - ./docker-nginx/certs:/etc/letsencrypt
+    image: nginx
