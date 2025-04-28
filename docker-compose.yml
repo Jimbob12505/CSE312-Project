@@ -11,5 +11,3 @@ services:
     image: nginx
   mongo:
     image: mongo:4.2.5
-    ports:
-      - '27017:27017'
