@@ -2,7 +2,7 @@ FROM node:20-alpine AS frontend-builder
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
 RUN npm ci
-COPY frontend ./
+COPY docker-nginx/html/frontend ./
 RUN npm run build
 
 FROM python:3.10
@@ -10,13 +10,13 @@ FROM python:3.10
 ENV HOME /root
 WORKDIR /root
 
-COPY requirements.txt ./requirements.txt
-COPY server.py ./server.py
-COPY database.py ./database.py
-COPY game_websocket.py ./game_websocket.py
+COPY docker-nginx/html/requirements.txt ./requirements.txt
+COPY docker-nginx/html/server.py ./server.py
+COPY docker-nginx/html/database.py ./database.py
+COPY docker-nginx/html/game_websocket.py ./game_websocket.py
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
-COPY frontend/app ./frontend/app
-COPY backend ./backend
+COPY docker-nginx/html/frontend/app ./frontend/app
+COPY docker-nginx/html/backend ./backend
 
 RUN apt update
 RUN apt install ffmpeg -y

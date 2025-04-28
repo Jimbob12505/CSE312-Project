@@ -2,3 +2,4 @@
 .idea
 docker-nginx/html/frontend/dist
 docker-nginx/html/requests.log
+requests.log

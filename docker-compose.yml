@@ -8,6 +8,7 @@ services:
       - ./docker-nginx/html:/usr/share/nginx/html
       - ./docker-nginx/configs:/etc/nginx/conf.d
       - ./docker-nginx/certs:/etc/letsencrypt
+      - ./:/logs
     image: nginx
   mongo:
     image: mongo:4.2.5
