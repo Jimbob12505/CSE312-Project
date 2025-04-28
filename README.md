@@ -1,5 +1,5 @@
 # CSE312-Project
-## Pulic Link to App:<br>
+## Public Link to App:<br>
 <p>
 potato.cse312.dev
 wigglewars.me
