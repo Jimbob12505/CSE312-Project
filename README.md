@@ -1,4 +1,11 @@
 # CSE312-Project
+## Pulic Link to App:<br>
+<p>
+potato.cse312.dev
+wigglewars.me
+www.wigglewars.me
+</p>
+
 - create a new venv by ```python3 -m venv venv```
 - activate venv by doing ```source venv/bin/activate```
 - install requirements: ```pip install -r requirements.txt```
