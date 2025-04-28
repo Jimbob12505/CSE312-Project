@@ -5,8 +5,18 @@ import '../styles/game.css';
 // 2D point in pixels
 type Point = { x: number; y: number };
 // Food with color and position
-type Food = Point & { color: string };
-
+type Food = Point & { color: string; id: string; active: boolean };
+// Snake type with complete information
+type Snake = {
+  id: string;
+  x: number;
+  y: number;
+  color: string;
+  username?: string;
+  segments: Point[];
+  length: number;
+  score: number;
+};
 
 
 // Generate random hex color
@@ -17,8 +27,8 @@ function randomColor(): string {
 export default function Game() {
   const [playerName, setPlayerName] = useState('');
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const otherPlayersRef = useRef<{ x: number; y: number; color: string; username?: string }[]>([]);
-  const [score, setScore]           = useState(0);
+  const otherPlayersRef = useRef<Snake[]>([]);
+  const [score, setScore]   = useState(0);
   const [snakeLengthState, setSnakeLengthState] = useState(1);
 
 
@@ -89,12 +99,6 @@ export default function Game() {
     lastPosRef.current = start;
     // directionRef already set to default
 
-    // scatter foods once
-    foodsRef.current = Array.from({ length: foodCount }).map(() => ({
-      x: Math.random() * canvas.width,
-      y: Math.random() * canvas.height,
-      color: randomColor(),
-    }));
 
     // animation loop
     const animate = () => {
@@ -126,14 +130,19 @@ export default function Game() {
 
       // food collision and growth (grow by 1 circle every 5 foods eaten)
       foodsRef.current.forEach((f, idx) => {
+        if (!f.active) return;
+        
         const d = Math.hypot(f.x - newHead.x, f.y - newHead.y);
         if (d < snakeRadius * 1.6) {
-          // respawn this food
-          foodsRef.current[idx] = {
-            x: Math.random() * canvas.width,
-            y: Math.random() * canvas.height,
-            color: randomColor(),
-          };
+          f.active = false;
+          
+          if (wsRef.current?.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({
+              messageType: 'eat_food',
+              food_id: f.id
+            }));
+          }
+          
           // increment eat counter
           eatCountRef.current += 1;
           setScore(eatCountRef.current);
@@ -147,9 +156,14 @@ export default function Game() {
 
       // drawing
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+
       foodsRef.current.forEach(f => {
-        ctx.beginPath(); ctx.arc(f.x, f.y, snakeRadius * 0.3, 0, 2 * Math.PI);
-        ctx.fillStyle = f.color; ctx.fill();
+        if (f.active) {
+          ctx.beginPath(); 
+          ctx.arc(f.x, f.y, snakeRadius * 0.3, 0, 2 * Math.PI);
+          ctx.fillStyle = f.color; 
+          ctx.fill();
+        }
       });
     
       ctx.fillStyle = snakeColorRef.current;
@@ -179,34 +193,52 @@ export default function Game() {
         ctx.fillText(playerNameRef.current, head.x, textY); 
       }
 
-      otherPlayersRef.current.forEach(p => {
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, snakeRadius * 0.8, 0, 2 * Math.PI);
-        ctx.fillStyle = p.color;
-        ctx.fill();
+      otherPlayersRef.current.forEach(snake => {
+        if (snake.segments && snake.segments.length > 0) {
+          for (let i = snake.segments.length - 1; i >= 0; i--) {
+            const p = snake.segments[i];
+            const t = i / snake.segments.length;
+            const r = snakeRadius * (1 - 0.3 * t);
+            
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, r, 0, 2 * Math.PI);
+            ctx.fillStyle = snake.color;
+            ctx.fill();
+          }
+        } else {
+          ctx.beginPath();
+          ctx.arc(snake.x, snake.y, snakeRadius * 0.8, 0, 2 * Math.PI);
+          ctx.fillStyle = snake.color;
+          ctx.fill();
+        }
         
-        if (p.username) {
+        if (snake.username) {
+          const head = snake.segments && snake.segments.length > 0 ? snake.segments[0] : snake;
+          
           ctx.font = 'bold 14px Arial';
           ctx.textAlign = 'center';
           
-          const textY = p.y - snakeRadius - 3;
+          const textY = head.y - snakeRadius - 3;
           
           ctx.strokeStyle = 'black';
           ctx.lineWidth = 3;
-          ctx.strokeText(p.username, p.x, textY);
+          ctx.strokeText(snake.username, head.x, textY);
           
           ctx.fillStyle = 'white';
-          ctx.fillText(p.username, p.x, textY);
+          ctx.fillText(snake.username, head.x, textY);
         }
       });
 
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({
           messageType: 'move',
-          snake_x:    segs[0].x,
-          snake_y:    segs[0].y,
+          snake_x: segs[0].x,
+          snake_y: segs[0].y,
           snake_color: snakeColorRef.current,
-          username: playerNameRef.current
+          username: playerNameRef.current,
+          segments: segs,
+          length: lengthRef.current,
+          score: eatCountRef.current
         }));
       }
 
@@ -250,36 +282,60 @@ export default function Game() {
           username: playerNameRef.current
         }));
       };
+      
       socket.onmessage = evt => {
         const data = JSON.parse(evt.data);
+        console.log('Received message:', data.messageType);
 
         if (data.messageType === 'init_location') {
-          // seed all foods and all snakes
+          console.log('Received init data with', data.snakes.length, 'snakes and', data.foods.length, 'foods');
+          
           foodsRef.current = data.foods;
-          otherPlayersRef.current = data.snakes;
+          
+          otherPlayersRef.current = data.snakes.filter(
+            (snake: Snake) => snake.color !== snakeColorRef.current
+          );
         }
-
-        if (data.messageType === 'move') {
-          // find existing or add new
-          const idx = otherPlayersRef.current.findIndex(p => p.color === data.snake_color);
+        else if (data.messageType === 'snake_joined' || data.messageType === 'snake_update') {
+          const snake = data.snake;
+          
+          if (snake.color === snakeColorRef.current) return;
+          
+          const idx = otherPlayersRef.current.findIndex(p => p.id === snake.id);
+          
           if (idx >= 0) {
-            otherPlayersRef.current[idx].x = data.snake_x;
-            otherPlayersRef.current[idx].y = data.snake_y;
-            otherPlayersRef.current[idx].username = data.username;
+            otherPlayersRef.current[idx] = snake;
           } else {
-            otherPlayersRef.current.push({
-              x:     data.snake_x,
-              y:     data.snake_y,
-              color: data.snake_color,
-              username: data.username
-            });
+            otherPlayersRef.current.push(snake);
           }
         }
+        else if (data.messageType === 'snake_left') {
+          const snake_id = data.snake_id;
+          otherPlayersRef.current = otherPlayersRef.current.filter(
+            snake => snake.id !== snake_id
+          );
+        }
+        else if (data.messageType === 'food_update') {
+          const foodId = data.food_id;
+          const isActive = data.active;
+        
+          const foodIdx = foodsRef.current.findIndex(f => f.id === foodId);
+          if (foodIdx >= 0) {
+            foodsRef.current[foodIdx].active = isActive;
+          }
+        }
+        else if (data.messageType === 'new_foods') {
 
-        // you can handle further messageTypes (e.g. new_player, move, etc.) here
+          console.log('Received new foods:', data.foods.length);
+          
+          if (data.foods && Array.isArray(data.foods)) {
+            foodsRef.current = [...foodsRef.current, ...data.foods];
+          }
+        }
       };
-      socket.onerror   = e => console.error(e);
-      socket.onclose   = () => console.log('WS closed');
+      
+      socket.onerror = e => console.error('WebSocket error:', e);
+      socket.onclose = () => console.log('WS closed');
 
       return () => { socket.close(); };
     }
@@ -364,3 +420,4 @@ export default function Game() {
     </div>
   );
 }
+

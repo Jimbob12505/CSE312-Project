@@ -13,6 +13,7 @@ WORKDIR /root
 COPY ./requirements.txt ./requirements.txt
 COPY ./server.py ./server.py
 COPY ./database.py ./database.py
+COPY ./game_websocket.py ./game_websocket.py
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 COPY ./backend ./backend
 

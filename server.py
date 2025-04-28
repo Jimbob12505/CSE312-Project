@@ -2,13 +2,21 @@ import backend.paths.auth_paths as auth
 from flask import Flask, send_from_directory, request, jsonify, make_response, abort, Response
 import os
 import hashlib
+import json
+from flask_sock import Sock
+import database as db
+import threading
+import game_websocket as websocket
 
 app = Flask(__name__, 
             static_folder='frontend/dist', 
             static_url_path='')
+sock = Sock(app)
 
 @app.route("/")
 def index():
+    # 确保食物生成线程已启动
+    websocket.start_food_spawn_thread()
     return send_from_directory(app.static_folder, 'index.html')
 
 @app.route("/register")
@@ -41,6 +49,12 @@ def logout():
     res.status_code = 302
     res.headers["Location"] = "/api/logout"
     return res
+
+# WebSocket处理游戏连接
+@sock.route("/ws/game")
+def ws_game(ws):
+    # 使用websocket模块中的函数处理WebSocket连接
+    websocket.handle_game_websocket(ws)
 
 # API路由
 @app.route("/api/hello")
@@ -89,7 +103,6 @@ def get_current_user():
     auth_token = request.cookies["auth_token"]
     hashed_auth = hashlib.sha256(auth_token.encode("utf-8")).hexdigest().encode("utf-8")
     
-    import database as db
     user = db.user_collection.find_one({"token": hashed_auth})
     
     if not user:
@@ -111,4 +124,6 @@ def serve_static(path):
     return send_from_directory(app.static_folder, 'index.html')
 
 if __name__ == '__main__':
+    # 初始化游戏系统
+    websocket.init_game_system()
     app.run(host="0.0.0.0", port=8080, debug=True) 

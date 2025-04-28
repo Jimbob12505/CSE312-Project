@@ -37,7 +37,6 @@ export default function Register() {
         navigate('/login');
       } else {
         const errorText = await response.text();
-        // 处理特定的密码错误，显示简化的消息
         if (errorText === "Password invalid") {
           setError('Password does not meet requirements');
         } else {
