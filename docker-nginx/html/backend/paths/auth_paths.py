@@ -1,7 +1,6 @@
 import hashlib
 import uuid
 import bcrypt
-import pymongo
 import database as db
 import backend.tools.auth_tools as tools
 from flask import Request, Response
