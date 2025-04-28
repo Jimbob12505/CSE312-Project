@@ -1,34 +1,60 @@
 import "../styles/login.css"
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 
 export default function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [isLogin, setIsLogin] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+    
     const payload = `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
+<<<<<<< HEAD
     console.log(payload)
+=======
+    
+>>>>>>> docker-fix427
     try {
-      const response = await fetch('/auth/login', {
+      const response = await fetch('/api/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
+        credentials: 'include',
         body: payload,
 
       });
+<<<<<<< HEAD
       if (!response.ok){
         const err = await response.json();
         throw new Error(err.message || 'Login failed');
       }
       const data = await response.json();
       console.log('Login successful');
+=======
+      
+      if (response.ok) {
+        console.log('Login successful');
+        navigate('/game');
+      } else {
+        const errorText = await response.text();
+        if (errorText === "Username does not exist") {
+          setError('Invalid username or password');
+        } else if (errorText === "Password does not match") {
+          setError('Invalid username or password');
+        } else {
+          setError(errorText || 'Login failed');
+        }
+        console.error('Login failed:', errorText);
+      }
+>>>>>>> docker-fix427
     } catch (error) {
-      console.error(error);
+      console.error('Network error:', error);
+      setError('Network error. Please try again.');
     }
   };
 
@@ -40,22 +66,15 @@ export default function Login() {
           <div className="form-container">
             <div className="form-content">
               <div className="tab-container">
-                <button
-                    className={`tab-button ${isLogin ? 'active' : 'inactive'}`}
-                    onClick={() => setIsLogin(true)}
-                >
+                <Link to="/login" className="tab-button active">
                   Login
-                </button>
-                <button
-                    className={`tab-button ${!isLogin ? 'active' : 'inactive'}`}
-                    onClick={() => {
-                      setIsLogin(false);
-                      navigate('/register');
-                    }}
-                >
+                </Link>
+                <Link to="/register" className="tab-button inactive">
                   Register
-                </button>
+                </Link>
               </div>
+
+              {error && <div className="error-message">{error}</div>}
 
               <form onSubmit={handleSubmit}>
                 <div className="form-field">
@@ -89,7 +108,7 @@ export default function Login() {
                 </div>
 
                 <button type="submit" className="form-submit">
-                  {isLogin ? 'Login' : 'Register'}
+                  Login
                 </button>
               </form>
             </div>

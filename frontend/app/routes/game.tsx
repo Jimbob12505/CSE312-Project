@@ -1,36 +1,51 @@
-import React, { useRef, useEffect, useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import '../styles/game.css';
+import React, { useRef, useEffect, useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
+import "../styles/game.css";
 
 // 2D point in pixels
 type Point = { x: number; y: number };
 // Food with color and position
-type Food = Point & { color: string };
-
-
+type Food = Point & { color: string; id: string; active: boolean };
+// Snake type with complete information
+type Snake = {
+  id: string;
+  x: number;
+  y: number;
+  color: string;
+  username?: string;
+  segments: Point[];
+  length: number;
+  score: number;
+};
 
 // Generate random hex color
 function randomColor(): string {
-  return '#' + Math.floor(Math.random() * 0xFFFFFF).toString(16).padStart(6, '0');
+  return (
+    "#" +
+    Math.floor(Math.random() * 0xffffff)
+      .toString(16)
+      .padStart(6, "0")
+  );
 }
 
 export default function Game() {
-  const [playerName] = useState('Playername');
+  const [playerName, setPlayerName] = useState("");
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const otherPlayersRef = useRef<{ x: number; y: number; color: string }[]>([]);
-  const [score, setScore]           = useState(0);
+
+  const otherPlayersRef = useRef<Snake[]>([]);
+  const [score, setScore] = useState(0);
   const [snakeLengthState, setSnakeLengthState] = useState(1);
 
-
   const wsRef = useRef<WebSocket | null>(null);
+  const playerNameRef = useRef<string>("");
 
   const location = useLocation();
 
   const snakeColorRef = useRef<string>(randomColor());
   // Game config
-  const snakeRadius = 15;       // radius of each circle segment
+  const snakeRadius = 15; // radius of each circle segment
   const segmentSpacing = snakeRadius * 1.6; // spacing between circles for overlap
-  const speed = 1.5;              // px per frame
+  const speed = 1.5; // px per frame
   const foodCount = 100;
 
   // Direction vector for movement (unit vector)
@@ -47,12 +62,39 @@ export default function Game() {
   const foodsRef = useRef<Food[]>([]);
 
   useEffect(() => {
+    const fetchCurrentUser = async () => {
+      try {
+        const response = await fetch("/api/user/current", {
+          credentials: "include",
+        });
+
+        if (response.ok) {
+          const userData = await response.json();
+          setPlayerName(userData.username);
+          playerNameRef.current = userData.username;
+        } else {
+          console.error("Failed to fetch user data");
+          navigate("/login");
+        }
+      } catch (error) {
+        console.error("Error fetching user data:", error);
+      }
+    };
+
+    fetchCurrentUser();
+  }, []);
+
+  useEffect(() => {
+    playerNameRef.current = playerName;
+  }, [playerName]);
+
+  useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const parent = canvas.parentElement!;
     canvas.width = parent.clientWidth;
     canvas.height = parent.clientHeight;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
     // initialize head segment
@@ -60,13 +102,6 @@ export default function Game() {
     segmentsRef.current = [start];
     lastPosRef.current = start;
     // directionRef already set to default
-
-    // scatter foods once
-    foodsRef.current = Array.from({ length: foodCount }).map(() => ({
-      x: Math.random() * canvas.width,
-      y: Math.random() * canvas.height,
-      color: randomColor(),
-    }));
 
     // animation loop
     const animate = () => {
@@ -76,7 +111,7 @@ export default function Game() {
       const newHead = { x: head.x + dir.x * speed, y: head.y + dir.y * speed };
       // ── APPEND THESE LINES TO KEEP THE HEAD INSIDE THE BORDER ──
       const minX = snakeRadius;
-      const maxX = canvas.width  - snakeRadius;
+      const maxX = canvas.width - snakeRadius;
       const minY = snakeRadius;
       const maxY = canvas.height - snakeRadius;
 
@@ -98,14 +133,21 @@ export default function Game() {
 
       // food collision and growth (grow by 1 circle every 5 foods eaten)
       foodsRef.current.forEach((f, idx) => {
+        if (!f.active) return;
+
         const d = Math.hypot(f.x - newHead.x, f.y - newHead.y);
         if (d < snakeRadius * 1.6) {
-          // respawn this food
-          foodsRef.current[idx] = {
-            x: Math.random() * canvas.width,
-            y: Math.random() * canvas.height,
-            color: randomColor(),
-          };
+          f.active = false;
+
+          if (wsRef.current?.readyState === WebSocket.OPEN) {
+            wsRef.current.send(
+              JSON.stringify({
+                messageType: "eat_food",
+                food_id: f.id,
+              })
+            );
+          }
+
           // increment eat counter
           eatCountRef.current += 1;
           setScore(eatCountRef.current);
@@ -119,12 +161,17 @@ export default function Game() {
 
       // drawing
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      foodsRef.current.forEach(f => {
-        ctx.beginPath(); ctx.arc(f.x, f.y, snakeRadius * 0.3, 0, 2 * Math.PI);
-        ctx.fillStyle = f.color; ctx.fill();
-      });
-      ctx.fillStyle = snakeColorRef.current;
 
+      foodsRef.current.forEach((f) => {
+        if (f.active) {
+          ctx.beginPath();
+          ctx.arc(f.x, f.y, snakeRadius * 0.3, 0, 2 * Math.PI);
+          ctx.fillStyle = f.color;
+          ctx.fill();
+        }
+      });
+
+      ctx.fillStyle = snakeColorRef.current;
       const segs = segmentsRef.current;
       for (let i = segs.length - 1; i >= 0; i--) {
         const p = segs[i];
@@ -135,20 +182,74 @@ export default function Game() {
         ctx.fill();
       }
 
-      otherPlayersRef.current.forEach(p => {
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, snakeRadius * 0.8, 0, 2 * Math.PI);
-        ctx.fillStyle = p.color;
-        ctx.fill();
+      // username on the snake head
+      if (segs.length > 0 && playerNameRef.current) {
+        const head = segs[0];
+        ctx.font = "bold 14px Arial";
+        ctx.textAlign = "center";
+
+        const textY = head.y - snakeRadius - 3;
+
+        ctx.strokeStyle = "black";
+        ctx.lineWidth = 3;
+        ctx.strokeText(playerNameRef.current, head.x, textY);
+
+        ctx.fillStyle = "white";
+        ctx.fillText(playerNameRef.current, head.x, textY);
+      }
+
+      otherPlayersRef.current.forEach((snake) => {
+        if (snake.segments && snake.segments.length > 0) {
+          for (let i = snake.segments.length - 1; i >= 0; i--) {
+            const p = snake.segments[i];
+            const t = i / snake.segments.length;
+            const r = snakeRadius * (1 - 0.3 * t);
+
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, r, 0, 2 * Math.PI);
+            ctx.fillStyle = snake.color;
+            ctx.fill();
+          }
+        } else {
+          ctx.beginPath();
+          ctx.arc(snake.x, snake.y, snakeRadius * 0.8, 0, 2 * Math.PI);
+          ctx.fillStyle = snake.color;
+          ctx.fill();
+        }
+
+        if (snake.username) {
+          const head =
+            snake.segments && snake.segments.length > 0
+              ? snake.segments[0]
+              : snake;
+
+          ctx.font = "bold 14px Arial";
+          ctx.textAlign = "center";
+
+          const textY = head.y - snakeRadius - 3;
+
+          ctx.strokeStyle = "black";
+          ctx.lineWidth = 3;
+          ctx.strokeText(snake.username, head.x, textY);
+
+          ctx.fillStyle = "white";
+          ctx.fillText(snake.username, head.x, textY);
+        }
       });
 
       if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({
-          messageType: 'move',
-          snake_x:    segs[0].x,
-          snake_y:    segs[0].y,
-          snake_color: snakeColorRef.current
-        }));
+        wsRef.current.send(
+          JSON.stringify({
+            messageType: "move",
+            snake_x: segs[0].x,
+            snake_y: segs[0].y,
+            snake_color: snakeColorRef.current,
+            username: playerNameRef.current,
+            segments: segs,
+            length: lengthRef.current,
+            score: eatCountRef.current,
+          })
+        );
       }
 
       requestAnimationFrame(animate);
@@ -164,91 +265,129 @@ export default function Game() {
     const onMouseMove = (e: MouseEvent) => {
       // get current head position
       const head = segmentsRef.current[0];
-      const dx = (e.clientX - rect.left) - head.x;
-      const dy = (e.clientY - rect.top) - head.y;
+      const dx = e.clientX - rect.left - head.x;
+      const dy = e.clientY - rect.top - head.y;
       const dist = Math.hypot(dx, dy) || 1;
       directionRef.current = { x: dx / dist, y: dy / dist };
     };
-    canvas.addEventListener('mousemove', onMouseMove);
-    return () => canvas.removeEventListener('mousemove', onMouseMove);
+    canvas.addEventListener("mousemove", onMouseMove);
+    return () => canvas.removeEventListener("mousemove", onMouseMove);
   }, []);
+
   useEffect(() => {
-    if (location.pathname === '/game') {
-      const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
-      const socket = new WebSocket(`${scheme}://${window.location.host}/ws/game`);
+    if (location.pathname === "/game") {
+      const scheme = window.location.protocol === "https:" ? "wss" : "ws";
+      const socket = new WebSocket(
+        `${scheme}://${window.location.host}/ws/game`
+      );
       wsRef.current = socket;
 
       socket.onopen = () => {
-        console.log('WebSocket connected');
+        console.log("WebSocket connected");
         // send our initial head+color so server can record us
         const head = segmentsRef.current[0];
-        socket.send(JSON.stringify({
-          messageType: 'join',
-          snake_x: head.x,
-          snake_y: head.y,
-          snake_color: snakeColorRef.current,
-          name: playerName
-        }));
+        socket.send(
+          JSON.stringify({
+            messageType: "join",
+            snake_x: head.x,
+            snake_y: head.y,
+            snake_color: snakeColorRef.current,
+
+            username: playerNameRef.current,
+          })
+        );
       };
-      socket.onmessage = evt => {
+
+      socket.onmessage = (evt) => {
         const data = JSON.parse(evt.data);
-        if (data.messageType === 'leaderboard') {
+
+        if (data.messageType === "leaderboard") {
           setLeaderboard(data.leaderboard.slice(0, 10));
         }
-        if (data.messageType === 'init_location') {
-          // seed all foods and all snakes
-          foodsRef.current = data.foods;
-          otherPlayersRef.current = data.snakes;
-        }
 
-        if (data.messageType === 'move') {
-          // find existing or add new
-          const idx = otherPlayersRef.current.findIndex(p => p.color === data.snake_color);
+        console.log("Received message:", data.messageType);
+
+        if (data.messageType === "init_location") {
+          console.log(
+            "Received init data with",
+            data.snakes.length,
+            "snakes and",
+            data.foods.length,
+            "foods"
+          );
+
+          foodsRef.current = data.foods;
+
+          otherPlayersRef.current = data.snakes.filter(
+            (snake: Snake) => snake.color !== snakeColorRef.current
+          );
+        } else if (
+          data.messageType === "snake_joined" ||
+          data.messageType === "snake_update"
+        ) {
+          const snake = data.snake;
+
+          if (snake.color === snakeColorRef.current) return;
+
+          const idx = otherPlayersRef.current.findIndex(
+            (p) => p.id === snake.id
+          );
+
           if (idx >= 0) {
-            otherPlayersRef.current[idx].x = data.snake_x;
-            otherPlayersRef.current[idx].y = data.snake_y;
+            otherPlayersRef.current[idx] = snake;
           } else {
-            otherPlayersRef.current.push({
-              x:     data.snake_x,
-              y:     data.snake_y,
-              color: data.snake_color
-            });
+            otherPlayersRef.current.push(snake);
+          }
+        } else if (data.messageType === "snake_left") {
+          const snake_id = data.snake_id;
+          otherPlayersRef.current = otherPlayersRef.current.filter(
+            (snake) => snake.id !== snake_id
+          );
+        } else if (data.messageType === "food_update") {
+          const foodId = data.food_id;
+          const isActive = data.active;
+
+          const foodIdx = foodsRef.current.findIndex((f) => f.id === foodId);
+          if (foodIdx >= 0) {
+            foodsRef.current[foodIdx].active = isActive;
+          }
+        } else if (data.messageType === "new_foods") {
+          console.log("Received new foods:", data.foods.length);
+
+          if (data.foods && Array.isArray(data.foods)) {
+            foodsRef.current = [...foodsRef.current, ...data.foods];
           }
         }
-        if (data.messageType === 'food_update') {
-          // patch that one food pellet
-          const { foodIndex, x, y, color } = data;
-          foodsRef.current[foodIndex] = { x, y, color };
-        }
-
-        // you can handle further messageTypes (e.g. new_player, move, etc.) here
       };
-      socket.onerror   = e => console.error(e);
-      socket.onclose   = () => console.log('WS closed');
 
-      return () => { socket.close(); };
+      socket.onerror = (e) => console.error("WebSocket error:", e);
+      socket.onclose = () => console.log("WS closed");
+
+      return () => {
+        socket.close();
+      };
     }
-  }, [location.pathname]);
-  //
+  }, [location.pathname, playerName]);
   // leaderboard sample data
   // waiting actual API call
+
   const navigate = useNavigate();
-  const [leaderboard, setLeaderboard] = useState<{ name: string; score: number }[]>([]);
+  const [leaderboard, setLeaderboard] = useState<
+    { name: string; score: number }[]
+  >([]);
 
   const handleLogout = async () => {
     try {
-      const response = await fetch('/auth/login', {
-        method: 'GET',
+      const response = await fetch("/auth/logout", {
+        method: "GET",
       });
 
-      if (!response.ok)
-        console.log('Logout failed');
+      if (!response.ok) console.log("Logout failed");
 
-      navigate('/login');
-    }
-    catch (error) {
+      navigate("/login");
+    } catch (error) {
       console.error(error);
-      navigate('/login');
+      navigate("/login");
     }
   };
 
@@ -280,9 +419,9 @@ export default function Game() {
           {/* 排行榜列表 */}
           <div className="player-list">
             {leaderboard.map((player, index) => (
-                <div key={index} className="player-item">
-                  {index + 1}. {player.name} – {player.score}
-                </div>
+              <div key={index} className="player-item">
+                {index + 1}. {player.name} – {player.score}
+              </div>
             ))}
           </div>
         </div>
