@@ -25,11 +25,15 @@ const WORLD_HEIGHT = 1600; // Reduced world height - about 2x screen size
 const VIEWPORT_WIDTH = 1200; // Visible area width
 const VIEWPORT_HEIGHT = 800; // Visible area height
 const BORDER_THICKNESS = 20; // Thickness of the world border
+const STANDARD_SPEED = 3; // Standard speed in pixels per frame at 60fps
 
 // Generate random hex color
 function randomColor(): string {
   return '#' + Math.floor(Math.random() * 0xFFFFFF).toString(16).padStart(6, '0');
 }
+
+const lastFrameTimeRef = { current: 0 };
+const targetFPS = 60;
 
 export default function Game() {
   const [playerName, setPlayerName] = useState('');
@@ -64,7 +68,8 @@ export default function Game() {
   // Game config
   const snakeRadius = 15;       // radius of each circle segment
   const segmentSpacing = snakeRadius * 1.6; // spacing between circles for overlap
-  const speed = 1.2;              // px per frame - approximately 200px per second at 60fps (60 * 1.2 = 180px/s)
+  const baseSpeed = 1.2;          // base px per frame - approximately 200px per second at 60fps (60 * 1.2 = 180px/s)
+  const speedRef = useRef<number>(baseSpeed);
   const foodCount = 100;
   const collisionDistance = snakeRadius * 1.5; // Distance for collision detection
 
@@ -339,8 +344,17 @@ export default function Game() {
     cameraRef.current.x = Math.max(0, Math.min(WORLD_WIDTH - canvas.width, cameraRef.current.x));
     cameraRef.current.y = Math.max(0, Math.min(WORLD_HEIGHT - canvas.height, cameraRef.current.y));
 
+    // 设置初始帧时间
+    lastFrameTimeRef.current = performance.now();
+
     // animation loop
-    const animate = () => {
+    const animate = (currentTime: number) => {
+
+      const deltaTime = (currentTime - lastFrameTimeRef.current) / 1000;
+      lastFrameTimeRef.current = currentTime;
+
+      const frameRateRatio = deltaTime * targetFPS;
+      
       // Skip movement if dead, just render
       if (!aliveRef.current) {
         // Draw death state
@@ -382,8 +396,15 @@ export default function Game() {
 
       const head = segmentsRef.current[0];
       const dir = directionRef.current;
-      // move head forward in current direction
-      const newHead = { x: head.x + dir.x * speed, y: head.y + dir.y * speed };
+      
+      // 使用帧率无关的速度计算
+      const speed = STANDARD_SPEED * frameRateRatio;
+      
+      // move head forward in current direction 
+      const newHead = { 
+        x: head.x + dir.x * speed, 
+        y: head.y + dir.y * speed 
+      };
       
       // ── KEEP THE HEAD INSIDE THE WORLD BORDER ──
       const minX = BORDER_THICKNESS + snakeRadius;
@@ -426,10 +447,9 @@ export default function Game() {
       
       // Check collision with other players
       for (const otherSnake of otherPlayersRef.current) {
-        // 必须确保与我们比较的是有效的蛇，并且是活着的
+
         if (!otherSnake || !otherSnake.alive || !otherSnake.segments || !otherSnake.id) continue;
         
-        // 再次确认不是与自己碰撞
         if (playerIdRef.current && otherSnake.id === playerIdRef.current) continue;
         
         // Head-to-head collision
@@ -647,7 +667,7 @@ export default function Game() {
       });
     };
     
-    animate();
+    animate(performance.now());
     
     return () => {
       window.removeEventListener('resize', resizeCanvas);
@@ -830,6 +850,8 @@ export default function Game() {
             initializeWebSocketHandlers(socket);
           }
         }, delay);
+      } else {
+        wsRef.current = null;
       }
     };
   };

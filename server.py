@@ -79,8 +79,7 @@ def logout():
 def ws_game(ws):
     try:
         websocket.handle_game_websocket(ws)
-    except Exception as e:
-        app.logger.error(f"WebSocket error: {str(e)}")
+    except Exception:
         try:
             ws.close(1011, "Internal server error")
         except:

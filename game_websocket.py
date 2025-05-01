@@ -140,7 +140,7 @@ def spawn_new_foods():
                 "foods": new_foods_list
             })
     except Exception as e:
-        print(f"Error spawning new foods: {e}")
+        pass
     
     global food_spawn_thread
     food_spawn_thread = threading.Timer(5.0, spawn_new_foods)
@@ -166,7 +166,6 @@ def broadcast_to_all(message, exclude_id=None):
                         client_ws = active_connections[client_id]
                         client_ws.send(json.dumps(message))
             except Exception as e:
-                print(f"Error broadcasting to {client_id}: {e}")
                 disconnect_client(client_id)
 
 def broadcast_food_update(food_id, is_active):
@@ -184,7 +183,6 @@ def handle_player_death(snake_id, segments, color):
             
         # Check if player is already marked as dead to avoid duplicate processing
         if not snake_positions[snake_id].get("alive", True):
-            print(f"Player {snake_id} already marked as dead, skipping death handling")
             return
         
         # Mark snake as dead in snake_positions
@@ -248,7 +246,6 @@ def check_heartbeats():
                     disconnected_clients.append(client_id)
     
     for client_id in disconnected_clients:
-        print(f"Client {client_id} timed out. Disconnecting.")
         disconnect_client(client_id)
     
     heartbeat_thread = threading.Timer(HEARTBEAT_INTERVAL, check_heartbeats)
@@ -267,26 +264,13 @@ def disconnect_client(client_id):
     
     # Only clean up snake if long disconnect
     # Check disconnect time
-    current_time = time.time()
-    is_long_disconnect = False
-    
-    if client_id in last_heartbeat:
-        disconnect_duration = current_time - last_heartbeat[client_id]
-        # If no heartbeat for over 30 seconds, consider it a long disconnect
-        is_long_disconnect = disconnect_duration > 30
-    else:
-        # If no heartbeat record, also consider it a long disconnect
-        is_long_disconnect = True
-    
-    # Only delete snake on long disconnect
-    if is_long_disconnect:
-        with snake_lock:
-            if client_id in snake_positions:
-                broadcast_to_all({
-                    "messageType": "snake_left",
-                    "snake_id": client_id
-                })
-                del snake_positions[client_id]
+    with snake_lock:
+        if client_id in snake_positions:
+            broadcast_to_all({
+                "messageType": "snake_left",
+                "snake_id": client_id
+            })
+            del snake_positions[client_id]
     
     # Remove from heartbeat records
     if client_id in last_heartbeat:
@@ -310,7 +294,6 @@ def broadcast_to_nearby(message, sender_pos, radius=1200, exclude_id=None):
                     client_ws = active_connections[client_id]
                     client_ws.send(json.dumps(message))
         except Exception as e:
-            print(f"Error broadcasting to nearby client {client_id}: {e}")
             disconnect_client(client_id)
 
 def handle_game_websocket(ws):
@@ -333,7 +316,6 @@ def handle_game_websocket(ws):
     # Check if there's an existing connection for this user, clean it up first
     with connections_lock:
         if conn_id in active_connections:
-            print(f"Found existing connection for {conn_id}, cleaning up first")
             old_ws = active_connections[conn_id]
             try:
                 old_ws.close(1000, "Replaced by new connection")
@@ -538,7 +520,7 @@ def handle_game_websocket(ws):
                         respawn_thread.start()
     
     except Exception as e:
-        print(f"WebSocket error: {e}")
+        pass
     finally:
         disconnect_client(conn_id)
 
