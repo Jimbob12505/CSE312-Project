@@ -100,11 +100,10 @@ export default function Game() {
           playerNameRef.current = userData.username;
           playerIdRef.current = userData.id;
         } else {
-          console.error('Failed to fetch user data');
           navigate('/login');
         }
       } catch (error) {
-        console.error('Error fetching user data:', error);
+        navigate('/login');
       }
     };
 
@@ -648,7 +647,6 @@ export default function Game() {
       wsRef.current = socket;
 
       socket.onopen = () => {
-        console.log('WebSocket connected');
         // send our initial head+color so server can record us
         const head = segmentsRef.current[0];
         socket.send(JSON.stringify({
@@ -663,11 +661,8 @@ export default function Game() {
       
       socket.onmessage = evt => {
         const data = JSON.parse(evt.data);
-        console.log('Received message:', data.messageType);
 
         if (data.messageType === 'init_location') {
-          console.log('Received init data with', data.snakes.length, 'snakes and', data.foods.length, 'foods');
-          
           foodsRef.current = data.foods;
           
           otherPlayersRef.current = data.snakes.filter(
@@ -717,15 +712,11 @@ export default function Game() {
           }
         }
         else if (data.messageType === 'new_foods') {
-          console.log('Received new foods:', data.foods.length);
-          
           if (data.foods && Array.isArray(data.foods)) {
             foodsRef.current = [...foodsRef.current, ...data.foods];
           }
         }
         else if (data.messageType === 'leaderboard_update') {
-          console.log('Received leaderboard update with', data.leaderboard?.length || 0, 'players');
-          
           // Update leaderboard with real-time data
           if (data.leaderboard && Array.isArray(data.leaderboard)) {
             setLeaderboard(prevLeaderboard => {
@@ -740,8 +731,8 @@ export default function Game() {
         }
       };
       
-      socket.onerror = e => console.error('WebSocket error:', e);
-      socket.onclose = () => console.log('WS closed');
+      socket.onerror = e => { /* Handle error silently */ };
+      socket.onclose = () => { /* Handle close silently */ };
 
       return () => { socket.close(); };
     }
@@ -758,13 +749,13 @@ export default function Game() {
         method: 'GET',
       });
 
-      if (!response.ok)
-        console.log('Logout failed');
+      if (!response.ok) {
+        // Silent failure
+      }
 
       navigate('/login');
     }
     catch (error) {
-      console.error(error);
       navigate('/login');
     }
   };

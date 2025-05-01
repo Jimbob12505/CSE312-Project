@@ -125,7 +125,6 @@ def spawn_new_foods():
             
             new_foods_list = list(new_foods.values())
             if new_foods_list:
-                print(f"Spawning {len(new_foods_list)} new foods")
                 broadcast_to_all({
                     "messageType": "new_foods",
                     "foods": new_foods_list
