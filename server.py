@@ -20,12 +20,19 @@ else:
 app = Flask(__name__, 
             static_folder=static_folder, 
             static_url_path='')
+            
+# websocket
 sock = Sock(app)
 
 handler = logging.FileHandler("/logs/requests.log")
 handler.setFormatter(logging.Formatter("%(asctime)s - %(message)s"))
 app.logger.addHandler(handler)
 app.logger.setLevel(logging.INFO)
+
+@app.errorhandler(500)
+def handle_server_error(e):
+    app.logger.error(f"Server error: {str(e)}")
+    return jsonify({"error": "Server "}), 500
 
 @app.before_request
 def log_request():
@@ -70,7 +77,14 @@ def logout():
 
 @sock.route("/ws/game")
 def ws_game(ws):
-    websocket.handle_game_websocket(ws)
+    try:
+        websocket.handle_game_websocket(ws)
+    except Exception as e:
+        app.logger.error(f"WebSocket error: {str(e)}")
+        try:
+            ws.close(1011, "Internal server error")
+        except:
+            pass
 
 @app.route("/auth/register", methods=["POST"])
 def auth_register():
@@ -125,4 +139,4 @@ def serve_static(path):
 
 if __name__ == '__main__':
     websocket.init_game_system()
-    app.run(host="0.0.0.0", port=8080, debug=True)
+    app.run(host="0.0.0.0", port=8080, debug=True, threaded=True)

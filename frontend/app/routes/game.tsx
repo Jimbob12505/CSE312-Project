@@ -87,6 +87,17 @@ export default function Game() {
   // Respawn timer
   const respawnTimerRef = useRef<number | null>(null);
 
+  // Added WebSocket reconnection counter
+  const reconnectCount = useRef<number>(0);
+  const maxReconnects = 5;
+  const reconnectDelay = 2000;
+  
+  // Added variables to limit sending frequency 
+  const lastSendTime = useRef<number>(0);
+  const sendInterval = 50; // Limit to 50ms per update, about 20fps
+  const sendPositionThreshold = 5; // Only send update if moved more than 5px
+  const lastSentPos = useRef<Point | null>(null);
+
   useEffect(() => {
     const fetchCurrentUser = async () => {
       try {
@@ -99,6 +110,17 @@ export default function Game() {
           setPlayerName(userData.username);
           playerNameRef.current = userData.username;
           playerIdRef.current = userData.id;
+          
+          console.log(`User authenticated: ${userData.username}, ID: ${userData.id}`);
+          
+          // Initialize WebSocket connection only after we have the player ID
+          if (location.pathname === '/game' && !wsRef.current) {
+            const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+            const socket = new WebSocket(`${scheme}://${window.location.host}/ws/game`);
+            wsRef.current = socket;
+            
+            initializeWebSocketHandlers(socket);
+          }
         } else {
           navigate('/login');
         }
@@ -239,7 +261,7 @@ export default function Game() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     
-    // 根据当前画布大小调整视口
+    // Adjust viewport based on canvas size
     const viewportWidth = canvas.width;
     const viewportHeight = canvas.height;
     
@@ -404,10 +426,14 @@ export default function Game() {
       
       // Check collision with other players
       for (const otherSnake of otherPlayersRef.current) {
-        if (!otherSnake.alive) continue; // Skip dead snakes
+        // 必须确保与我们比较的是有效的蛇，并且是活着的
+        if (!otherSnake || !otherSnake.alive || !otherSnake.segments || !otherSnake.id) continue;
+        
+        // 再次确认不是与自己碰撞
+        if (playerIdRef.current && otherSnake.id === playerIdRef.current) continue;
         
         // Head-to-head collision
-        if (otherSnake.segments && otherSnake.segments.length > 0) {
+        if (otherSnake.segments.length > 0) {
           const otherHead = otherSnake.segments[0];
           if (checkCollision(newHead, otherHead, collisionDistance)) {
             handleDeath();
@@ -502,17 +528,38 @@ export default function Game() {
       drawOtherPlayers(ctx);
 
       if (wsRef.current?.readyState === WebSocket.OPEN && aliveRef.current) {
-        wsRef.current.send(JSON.stringify({
-          messageType: 'move',
-          snake_x: segs[0].x,
-          snake_y: segs[0].y,
-          snake_color: snakeColorRef.current,
-          username: playerNameRef.current,
-          segments: segs,
-          length: lengthRef.current,
-          score: eatCountRef.current,
-          alive: aliveRef.current
-        }));
+        const currentTime = Date.now();
+        const head = segs[0];
+        
+        // Calculate distance from last sent position
+        let shouldSend = false;
+        
+        if (!lastSentPos.current) {
+          shouldSend = true;
+        } else {
+          const dx = head.x - lastSentPos.current.x;
+          const dy = head.y - lastSentPos.current.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          shouldSend = dist > sendPositionThreshold;
+        }
+        
+        // Check if we should send an update (based on time and position change)
+        if (shouldSend && currentTime - lastSendTime.current > sendInterval) {
+          lastSendTime.current = currentTime;
+          lastSentPos.current = { x: head.x, y: head.y };
+          
+          wsRef.current.send(JSON.stringify({
+            messageType: 'move',
+            snake_x: head.x,
+            snake_y: head.y,
+            snake_color: snakeColorRef.current,
+            username: playerNameRef.current,
+            segments: segs,
+            length: lengthRef.current,
+            score: eatCountRef.current,
+            alive: aliveRef.current
+          }));
+        }
       }
 
       requestAnimationFrame(animate);
@@ -640,104 +687,164 @@ export default function Game() {
     return () => canvas.removeEventListener('mousemove', onMouseMove);
   }, []);
   
-  useEffect(() => {
-    if (location.pathname === '/game') {
-      const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
-      const socket = new WebSocket(`${scheme}://${window.location.host}/ws/game`);
-      wsRef.current = socket;
-
-      socket.onopen = () => {
-        // send our initial head+color so server can record us
-        const head = segmentsRef.current[0];
-        socket.send(JSON.stringify({
-          messageType: 'join',
-          snake_x: head.x,
-          snake_y: head.y,
-          snake_color: snakeColorRef.current,
-          username: playerNameRef.current,
-          alive: true
-        }));
-      };
+  // WebSocket handler initialization function
+  const initializeWebSocketHandlers = (socket: WebSocket) => {
+    socket.onopen = () => {
+      console.log("WebSocket connection established");
+      // Reset reconnect counter
+      reconnectCount.current = 0;
       
-      socket.onmessage = evt => {
-        const data = JSON.parse(evt.data);
+      // Ensure we have player ID
+      if (!playerIdRef.current) {
+        console.log("No player ID available, cannot join game");
+        return;
+      }
+      
+      // Send initial data
+      const head = segmentsRef.current[0];
+      socket.send(JSON.stringify({
+        messageType: 'join',
+        snake_x: head.x,
+        snake_y: head.y,
+        snake_color: snakeColorRef.current,
+        username: playerNameRef.current,
+        alive: true
+      }));
+    };
+    
+    socket.onmessage = evt => {
+      const data = JSON.parse(evt.data);
 
-        if (data.messageType === 'init_location') {
-          foodsRef.current = data.foods;
-          
+      if (data.messageType === 'init_location') {
+        foodsRef.current = data.foods;
+        
+        // Make sure we have playerIdRef.current and filter out our own snake
+        if (playerIdRef.current) {
           otherPlayersRef.current = data.snakes.filter(
             (snake: Snake) => snake.id !== playerIdRef.current
           );
+        } else {
+          // If no ID yet, store all snakes
+          otherPlayersRef.current = data.snakes;
         }
-        else if (data.messageType === 'snake_joined' || data.messageType === 'snake_update') {
-          const snake = data.snake;
-          
-          if (snake.id === playerIdRef.current) return;
-          
-          const idx = otherPlayersRef.current.findIndex(p => p.id === snake.id);
-          
-          if (idx >= 0) {
-            otherPlayersRef.current[idx] = snake;
-          } else {
-            otherPlayersRef.current.push(snake);
-          }
-        }
-        else if (data.messageType === 'snake_left') {
-          const snake_id = data.snake_id;
-          otherPlayersRef.current = otherPlayersRef.current.filter(
-            snake => snake.id !== snake_id
-          );
-        }
-        else if (data.messageType === 'player_died') {
-          const snakeId = data.snake_id;
-          const idx = otherPlayersRef.current.findIndex(p => p.id === snakeId);
-          
-          if (idx >= 0) {
-            otherPlayersRef.current[idx].alive = false;
-            // Add death animation/particles here if desired
-          }
-          
-          // If death converted to food particles
-          if (data.food_particles && Array.isArray(data.food_particles)) {
-            foodsRef.current = [...foodsRef.current, ...data.food_particles];
-          }
-        }
-        else if (data.messageType === 'food_update') {
-          const foodId = data.food_id;
-          const isActive = data.active;
+      }
+      else if (data.messageType === 'heartbeat') {
+        // Respond to server heartbeat
+        socket.send(JSON.stringify({
+          messageType: 'heartbeat_response'
+        }));
+      }
+      else if (data.messageType === 'snake_joined' || data.messageType === 'snake_update') {
+        const snake = data.snake;
         
-          const foodIdx = foodsRef.current.findIndex(f => f.id === foodId);
-          if (foodIdx >= 0) {
-            foodsRef.current[foodIdx].active = isActive;
-          }
+        // Ensure we don't add ourselves to the other snakes list
+        if (playerIdRef.current && snake.id === playerIdRef.current) return;
+        
+        const idx = otherPlayersRef.current.findIndex(p => p.id === snake.id);
+        
+        if (idx >= 0) {
+          otherPlayersRef.current[idx] = snake;
+        } else {
+          otherPlayersRef.current.push(snake);
         }
-        else if (data.messageType === 'new_foods') {
-          if (data.foods && Array.isArray(data.foods)) {
-            foodsRef.current = [...foodsRef.current, ...data.foods];
+      }
+      else if (data.messageType === 'snake_left') {
+        const snake_id = data.snake_id;
+        otherPlayersRef.current = otherPlayersRef.current.filter(
+          snake => snake.id !== snake_id
+        );
+      }
+      else if (data.messageType === 'player_died') {
+        const snakeId = data.snake_id;
+        
+        // Check if it's our own death message
+        if (playerIdRef.current && snakeId === playerIdRef.current) {
+          // Server thinks we're dead, ensure local state matches
+          if (aliveRef.current) {
+            // If local state is still alive, call the death handler
+            handleDeath();
           }
+          return;
         }
-        else if (data.messageType === 'leaderboard_update') {
-          // Update leaderboard with real-time data
-          if (data.leaderboard && Array.isArray(data.leaderboard)) {
-            setLeaderboard(prevLeaderboard => {
-              const currentJson = JSON.stringify(prevLeaderboard);
-              const newJson = JSON.stringify(data.leaderboard);
-              if (currentJson !== newJson) {
-                return data.leaderboard;
-              }
-              return prevLeaderboard;
-            });
-          }
+        
+        const idx = otherPlayersRef.current.findIndex(p => p.id === snakeId);
+        
+        if (idx >= 0) {
+          otherPlayersRef.current[idx].alive = false;
+          // Add death animation/particles here if desired
         }
-      };
+        
+        // If death converted to food particles
+        if (data.food_particles && Array.isArray(data.food_particles)) {
+          foodsRef.current = [...foodsRef.current, ...data.food_particles];
+        }
+      }
+      else if (data.messageType === 'food_update') {
+        const foodId = data.food_id;
+        const isActive = data.active;
       
-      socket.onerror = e => { /* Handle error silently */ };
-      socket.onclose = () => { /* Handle close silently */ };
+        const foodIdx = foodsRef.current.findIndex(f => f.id === foodId);
+        if (foodIdx >= 0) {
+          foodsRef.current[foodIdx].active = isActive;
+        }
+      }
+      else if (data.messageType === 'new_foods') {
+        if (data.foods && Array.isArray(data.foods)) {
+          foodsRef.current = [...foodsRef.current, ...data.foods];
+        }
+      }
+      else if (data.messageType === 'leaderboard_update') {
+        // Update leaderboard with real-time data
+        if (data.leaderboard && Array.isArray(data.leaderboard)) {
+          setLeaderboard(prevLeaderboard => {
+            const currentJson = JSON.stringify(prevLeaderboard);
+            const newJson = JSON.stringify(data.leaderboard);
+            if (currentJson !== newJson) {
+              return data.leaderboard;
+            }
+            return prevLeaderboard;
+          });
+        }
+      }
+    };
+    
+    socket.onerror = e => { 
+      console.error("WebSocket error:", e);
+    };
+    
+    socket.onclose = (event) => {
+      console.log(`WebSocket closed: ${event.code} ${event.reason}`);
+      
+      // If not cleanly closed and not exceeded max reconnect attempts, try reconnecting
+      if (!event.wasClean && reconnectCount.current < maxReconnects) {
+        const delay = reconnectDelay * Math.pow(1.5, reconnectCount.current);
+        console.log(`Attempting to reconnect in ${delay}ms...`);
+        
+        reconnectCount.current += 1;
+        setTimeout(() => {
+          if (location.pathname === '/game') {
+            const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+            const socket = new WebSocket(`${scheme}://${window.location.host}/ws/game`);
+            wsRef.current = socket;
+            
+            initializeWebSocketHandlers(socket);
+          }
+        }, delay);
+      }
+    };
+  };
 
-      return () => { socket.close(); };
-    }
-  }, [location.pathname, playerName]);
-  
+  // Clean up WebSocket connection
+  useEffect(() => {
+    return () => {
+      if (wsRef.current) {
+        console.log("Closing WebSocket connection");
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+    };
+  }, []);
+
   // Initialize empty leaderboard (will be populated from WebSocket)
   const [leaderboard, setLeaderboard] = useState<Array<{id: string, name: string, score: number}>>([]);
 
