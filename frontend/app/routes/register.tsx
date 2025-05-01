@@ -10,6 +10,15 @@ export default function Register() {
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
+  const passwordRequirements = [
+    "At least 8 characters long",
+    "At least one lowercase letter",
+    "At least one uppercase letter",
+    "At least one number",
+    "At least one special character (!@#$%^&()-_=,:)",
+    "No invalid characters"
+  ];
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -65,6 +74,15 @@ export default function Register() {
               </div>
 
               {error && <div className="error-message">{error}</div>}
+              
+              <div className="password-requirements">
+                <h3>Password must meet the following requirements:</h3>
+                <ul>
+                  {passwordRequirements.map((req, index) => (
+                    <li key={index}>{req}</li>
+                  ))}
+                </ul>
+              </div>
 
               <form onSubmit={handleSubmit}>
                 <div className="form-field">
@@ -92,7 +110,9 @@ export default function Register() {
                       className="form-input"
                       placeholder="Enter your password"
                       value={password}
-                      onChange={e => setPassword(e.target.value)}
+                      onChange={(e) => {
+                        setPassword(e.target.value);
+                      }}
                       required
                   />
                 </div>

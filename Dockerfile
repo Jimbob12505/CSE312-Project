@@ -19,7 +19,6 @@ COPY ./frontend/app ./frontend/app
 COPY ./backend ./backend
 
 RUN apt update
-RUN apt install ffmpeg -y
 
 RUN pip3 install -r requirements.txt
 

@@ -16,8 +16,15 @@ type Snake = {
   segments: Point[];
   length: number;
   score: number;
+  alive: boolean;
 };
 
+// Game world and viewport configuration
+const WORLD_WIDTH = 2400;  // Reduced world width - about 2x screen size
+const WORLD_HEIGHT = 1600; // Reduced world height - about 2x screen size
+const VIEWPORT_WIDTH = 1200; // Visible area width
+const VIEWPORT_HEIGHT = 800; // Visible area height
+const BORDER_THICKNESS = 20; // Thickness of the world border
 
 // Generate random hex color
 function randomColor(): string {
@@ -30,10 +37,26 @@ export default function Game() {
   const otherPlayersRef = useRef<Snake[]>([]);
   const [score, setScore]   = useState(0);
   const [snakeLengthState, setSnakeLengthState] = useState(1);
+  const [isAlive, setIsAlive] = useState(true);
 
+  // Camera tracking
+  const cameraRef = useRef<Point>({ x: 0, y: 0 });
+  const worldToCanvas = (worldPos: Point): Point => {
+    return {
+      x: worldPos.x - cameraRef.current.x,
+      y: worldPos.y - cameraRef.current.y
+    };
+  };
+  const canvasToWorld = (canvasPos: Point): Point => {
+    return {
+      x: canvasPos.x + cameraRef.current.x,
+      y: canvasPos.y + cameraRef.current.y
+    };
+  };
 
   const wsRef = useRef<WebSocket | null>(null);
   const playerNameRef = useRef<string>('');
+  const playerIdRef = useRef<string>('');
 
   const location = useLocation();
 
@@ -41,8 +64,9 @@ export default function Game() {
   // Game config
   const snakeRadius = 15;       // radius of each circle segment
   const segmentSpacing = snakeRadius * 1.6; // spacing between circles for overlap
-  const speed = 1.5;              // px per frame
+  const speed = 1.2;              // px per frame - approximately 200px per second at 60fps (60 * 1.2 = 180px/s)
   const foodCount = 100;
+  const collisionDistance = snakeRadius * 1.5; // Distance for collision detection
 
   // Direction vector for movement (unit vector)
   const directionRef = useRef<Point>({ x: 1, y: 0 });
@@ -56,6 +80,12 @@ export default function Game() {
   const eatCountRef = useRef<number>(0);
   // Foods
   const foodsRef = useRef<Food[]>([]);
+  // Is player alive
+  const aliveRef = useRef<boolean>(true);
+  // Time of death to handle respawn
+  const deathTimeRef = useRef<number | null>(null);
+  // Respawn timer
+  const respawnTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     const fetchCurrentUser = async () => {
@@ -68,6 +98,7 @@ export default function Game() {
           const userData = await response.json();
           setPlayerName(userData.username);
           playerNameRef.current = userData.username;
+          playerIdRef.current = userData.id;
         } else {
           console.error('Failed to fetch user data');
           navigate('/login');
@@ -84,37 +115,278 @@ export default function Game() {
     playerNameRef.current = playerName;
   }, [playerName]);
 
+  // Helper function to check collision between two points with radius
+  const checkCollision = (p1: Point, p2: Point, distance: number): boolean => {
+    const dx = p1.x - p2.x;
+    const dy = p1.y - p2.y;
+    return Math.hypot(dx, dy) < distance;
+  };
+
+  // Helper function to check if a world position is in the viewport
+  const isInViewport = (worldPos: Point): boolean => {
+    const canvas = canvasRef.current;
+    if (!canvas) return false;
+    
+    const padding = snakeRadius * 2; // Extra padding to ensure objects are fully visible
+    
+    return (
+      worldPos.x >= cameraRef.current.x - padding && 
+      worldPos.x <= cameraRef.current.x + canvas.width + padding &&
+      worldPos.y >= cameraRef.current.y - padding && 
+      worldPos.y <= cameraRef.current.y + canvas.height + padding
+    );
+  };
+  
+  // Draw the world borders
+  const drawWorldBorders = (ctx: CanvasRenderingContext2D) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    ctx.fillStyle = 'rgba(100, 149, 237, 0.4)'; // Soft cornflower blue with transparency
+    
+    // Draw borders that are in the viewport
+    const camera = cameraRef.current;
+    
+    // Top border
+    if (camera.y <= BORDER_THICKNESS) {
+      ctx.fillRect(0, 0, canvas.width, BORDER_THICKNESS - camera.y);
+    }
+    
+    // Bottom border
+    if (camera.y + canvas.height >= WORLD_HEIGHT - BORDER_THICKNESS) {
+      const y = WORLD_HEIGHT - BORDER_THICKNESS - camera.y;
+      ctx.fillRect(0, y, canvas.width, BORDER_THICKNESS + (canvas.height - (WORLD_HEIGHT - camera.y)));
+    }
+    
+    // Left border
+    if (camera.x <= BORDER_THICKNESS) {
+      ctx.fillRect(0, 0, BORDER_THICKNESS - camera.x, canvas.height);
+    }
+    
+    // Right border
+    if (camera.x + canvas.width >= WORLD_WIDTH - BORDER_THICKNESS) {
+      const x = WORLD_WIDTH - BORDER_THICKNESS - camera.x;
+      ctx.fillRect(x, 0, BORDER_THICKNESS + (canvas.width - (WORLD_WIDTH - camera.x)), canvas.height);
+    }
+  };
+
+  // Function to handle player death
+  const handleDeath = () => {
+    if (!aliveRef.current) return; // Don't handle death multiple times
+    
+    aliveRef.current = false;
+    setIsAlive(false);
+    deathTimeRef.current = Date.now();
+    
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        messageType: 'player_died',
+        snake_id: playerIdRef.current,
+        segments: segmentsRef.current,
+        color: snakeColorRef.current
+      }));
+    }
+    
+    // Clear segments and prepare for respawn
+    segmentsRef.current = [];
+    
+    // Set respawn timer
+    respawnTimerRef.current = window.setTimeout(() => {
+      respawnPlayer();
+    }, 3000);
+  };
+
+  // Function to respawn player
+  const respawnPlayer = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    // Reset to center of world
+    const start: Point = { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2 };
+    segmentsRef.current = [start];
+    lastPosRef.current = start;
+    
+    // Reset camera
+    updateCamera(start);
+    
+    // Reset length and score
+    lengthRef.current = 1;
+    setSnakeLengthState(1);
+    eatCountRef.current = 0;
+    setScore(0);
+    
+    // Get new random color
+    snakeColorRef.current = randomColor();
+    
+    // Mark as alive
+    aliveRef.current = true;
+    setIsAlive(true);
+    deathTimeRef.current = null;
+    
+    // Send respawn event to server
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        messageType: 'respawn',
+        snake_x: start.x,
+        snake_y: start.y,
+        snake_color: snakeColorRef.current,
+        username: playerNameRef.current
+      }));
+    }
+  };
+
+  // Update camera position to follow player
+  const updateCamera = (head: Point) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    // 根据当前画布大小调整视口
+    const viewportWidth = canvas.width;
+    const viewportHeight = canvas.height;
+    
+    // Center the camera on the player
+    cameraRef.current = {
+      x: head.x - viewportWidth / 2,
+      y: head.y - viewportHeight / 2
+    };
+    
+    // Clamp camera to world boundaries
+    cameraRef.current.x = Math.max(0, Math.min(WORLD_WIDTH - viewportWidth, cameraRef.current.x));
+    cameraRef.current.y = Math.max(0, Math.min(WORLD_HEIGHT - viewportHeight, cameraRef.current.y));
+  };
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const parent = canvas.parentElement!;
-    canvas.width = parent.clientWidth;
-    canvas.height = parent.clientHeight;
+    
+    // Set to fill parent container completely
+    const resizeCanvas = () => {
+      // Save current camera center position
+      let centerX = 0, centerY = 0;
+      
+      if (segmentsRef.current.length > 0) {
+        const head = segmentsRef.current[0];
+        centerX = head.x;
+        centerY = head.y;
+      } else if (cameraRef.current) {
+        // If no head, use camera center point
+        centerX = cameraRef.current.x + (canvas.width / 2);
+        centerY = cameraRef.current.y + (canvas.height / 2);
+      }
+      
+      // Update canvas size
+      canvas.width = parent.clientWidth;
+      canvas.height = parent.clientHeight;
+      
+      // Readjust camera, keeping original center point
+      if (segmentsRef.current.length > 0) {
+        updateCamera(segmentsRef.current[0]);
+      } else if (centerX && centerY) {
+        cameraRef.current = {
+          x: centerX - (canvas.width / 2),
+          y: centerY - (canvas.height / 2)
+        };
+        
+        // Ensure camera is within world boundaries
+        cameraRef.current.x = Math.max(0, Math.min(WORLD_WIDTH - canvas.width, cameraRef.current.x));
+        cameraRef.current.y = Math.max(0, Math.min(WORLD_HEIGHT - canvas.height, cameraRef.current.y));
+      }
+    };
+    
+    // Initial size adjustment
+    resizeCanvas();
+    
+    // Add window resize listener
+    window.addEventListener('resize', resizeCanvas);
+    
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // initialize head segment
-    const start: Point = { x: canvas.width / 2, y: canvas.height / 2 };
+    // initialize head segment at center of world
+    const start: Point = { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2 };
     segmentsRef.current = [start];
     lastPosRef.current = start;
-    // directionRef already set to default
-
+    
+    // Initialize camera position
+    cameraRef.current = {
+      x: start.x - canvas.width / 2,
+      y: start.y - canvas.height / 2
+    };
+    
+    // Ensure camera is within world boundaries
+    cameraRef.current.x = Math.max(0, Math.min(WORLD_WIDTH - canvas.width, cameraRef.current.x));
+    cameraRef.current.y = Math.max(0, Math.min(WORLD_HEIGHT - canvas.height, cameraRef.current.y));
 
     // animation loop
     const animate = () => {
+      // Skip movement if dead, just render
+      if (!aliveRef.current) {
+        // Draw death state
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw world borders
+        drawWorldBorders(ctx);
+        
+        // Draw foods
+        foodsRef.current.forEach((f: Food) => {
+          if (f.active) {
+            const canvasPos = worldToCanvas(f);
+            if (isInViewport(f)) {
+              ctx.beginPath(); 
+              ctx.arc(canvasPos.x, canvasPos.y, snakeRadius * 0.3, 0, 2 * Math.PI);
+              ctx.fillStyle = f.color; 
+              ctx.fill();
+            }
+          }
+        });
+        
+        // Draw other players
+        drawOtherPlayers(ctx);
+        
+        // Draw respawn message
+        if (deathTimeRef.current) {
+          const respawnTime = Math.max(0, 3 - Math.floor((Date.now() - deathTimeRef.current) / 1000));
+          
+          ctx.font = 'bold 36px Arial';
+          ctx.textAlign = 'center';
+          ctx.fillStyle = 'red';
+          ctx.fillText('You died!', canvas.width / 2, canvas.height / 2 - 20);
+          ctx.fillText(`Respawning in ${respawnTime}...`, canvas.width / 2, canvas.height / 2 + 20);
+        }
+        
+        requestAnimationFrame(animate);
+        return;
+      }
+
       const head = segmentsRef.current[0];
       const dir = directionRef.current;
       // move head forward in current direction
       const newHead = { x: head.x + dir.x * speed, y: head.y + dir.y * speed };
-      // ── APPEND THESE LINES TO KEEP THE HEAD INSIDE THE BORDER ──
-      const minX = snakeRadius;
-      const maxX = canvas.width  - snakeRadius;
-      const minY = snakeRadius;
-      const maxY = canvas.height - snakeRadius;
-
-      newHead.x = Math.max(minX, Math.min(maxX, newHead.x));
-      newHead.y = Math.max(minY, Math.min(maxY, newHead.y));
-
+      
+      // ── KEEP THE HEAD INSIDE THE WORLD BORDER ──
+      const minX = BORDER_THICKNESS + snakeRadius;
+      const maxX = WORLD_WIDTH - BORDER_THICKNESS - snakeRadius;
+      const minY = BORDER_THICKNESS + snakeRadius;
+      const maxY = WORLD_HEIGHT - BORDER_THICKNESS - snakeRadius;
+      
+      // Check for wall collision
+      const hitWall = newHead.x <= minX || newHead.x >= maxX || newHead.y <= minY || newHead.y >= maxY;
+      
+      if (hitWall) {
+        // Bounce off walls
+        if (newHead.x <= minX || newHead.x >= maxX) {
+          directionRef.current.x *= -0.5;
+        }
+        if (newHead.y <= minY || newHead.y >= maxY) {
+          directionRef.current.y *= -0.5;
+        }
+        
+        // Enforce boundaries
+        newHead.x = Math.max(minX, Math.min(maxX, newHead.x));
+        newHead.y = Math.max(minY, Math.min(maxY, newHead.y));
+      }
+      
       // add new head circle only if beyond spacing
       const lastPos = lastPosRef.current;
       const dLast = Math.hypot(newHead.x - lastPos.x, newHead.y - lastPos.y);
@@ -127,8 +399,35 @@ export default function Game() {
       while (segmentsRef.current.length > lengthRef.current) {
         segmentsRef.current.pop();
       }
+      
+      // Update camera to follow player
+      updateCamera(newHead);
+      
+      // Check collision with other players
+      for (const otherSnake of otherPlayersRef.current) {
+        if (!otherSnake.alive) continue; // Skip dead snakes
+        
+        // Head-to-head collision
+        if (otherSnake.segments && otherSnake.segments.length > 0) {
+          const otherHead = otherSnake.segments[0];
+          if (checkCollision(newHead, otherHead, collisionDistance)) {
+            handleDeath();
+            requestAnimationFrame(animate);
+            return;
+          }
+          
+          // Check collision with other snake's segments (skipping head)
+          for (let i = 1; i < otherSnake.segments.length; i++) {
+            if (checkCollision(newHead, otherSnake.segments[i], collisionDistance * 0.8)) {
+              handleDeath();
+              requestAnimationFrame(animate);
+              return;
+            }
+          }
+        }
+      }
 
-      // food collision and growth (grow by 1 circle every 5 foods eaten)
+      // food collision and growth (grow by 1 circle every 3 foods eaten)
       foodsRef.current.forEach((f, idx) => {
         if (!f.active) return;
         
@@ -146,8 +445,8 @@ export default function Game() {
           // increment eat counter
           eatCountRef.current += 1;
           setScore(eatCountRef.current);
-          // grow one circle when eatCount is multiple of 5
-          if (eatCountRef.current % 5 === 0) {
+          // grow one circle when eatCount is multiple of 3
+          if (eatCountRef.current % 3 === 0) {
             lengthRef.current += 1;
             setSnakeLengthState(lengthRef.current);
           }
@@ -156,80 +455,54 @@ export default function Game() {
 
       // drawing
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-
+      
+      // Draw world borders
+      drawWorldBorders(ctx);
+      
       foodsRef.current.forEach(f => {
-        if (f.active) {
+        if (f.active && isInViewport(f)) {
+          const canvasPos = worldToCanvas(f);
           ctx.beginPath(); 
-          ctx.arc(f.x, f.y, snakeRadius * 0.3, 0, 2 * Math.PI);
+          ctx.arc(canvasPos.x, canvasPos.y, snakeRadius * 0.3, 0, 2 * Math.PI);
           ctx.fillStyle = f.color; 
           ctx.fill();
         }
       });
     
+      // Draw player snake
       ctx.fillStyle = snakeColorRef.current;
       const segs = segmentsRef.current;
       for (let i = segs.length - 1; i >= 0; i--) {
         const p = segs[i];
+        const canvasPos = worldToCanvas(p);
         const t = i / segs.length;
         const r = snakeRadius * (1 - 0.3 * t);
         ctx.beginPath();
-        ctx.arc(p.x, p.y, r, 0, 2 * Math.PI);
+        ctx.arc(canvasPos.x, canvasPos.y, r, 0, 2 * Math.PI);
         ctx.fill();
       }
 
       // username on the snake head
       if (segs.length > 0 && playerNameRef.current) {
         const head = segs[0]; 
+        const headCanvasPos = worldToCanvas(head);
         ctx.font = 'bold 14px Arial';
         ctx.textAlign = 'center';
         
-        const textY = head.y - snakeRadius - 3;
+        const textY = headCanvasPos.y - snakeRadius - 3;
         
         ctx.strokeStyle = 'black';
         ctx.lineWidth = 3;
-        ctx.strokeText(playerNameRef.current, head.x, textY); 
+        ctx.strokeText(playerNameRef.current, headCanvasPos.x, textY); 
         
         ctx.fillStyle = 'white';
-        ctx.fillText(playerNameRef.current, head.x, textY); 
+        ctx.fillText(playerNameRef.current, headCanvasPos.x, textY); 
       }
 
-      otherPlayersRef.current.forEach(snake => {
-        if (snake.segments && snake.segments.length > 0) {
-          for (let i = snake.segments.length - 1; i >= 0; i--) {
-            const p = snake.segments[i];
-            const t = i / snake.segments.length;
-            const r = snakeRadius * (1 - 0.3 * t);
-            
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, r, 0, 2 * Math.PI);
-            ctx.fillStyle = snake.color;
-            ctx.fill();
-          }
-        } else {
-          ctx.beginPath();
-          ctx.arc(snake.x, snake.y, snakeRadius * 0.8, 0, 2 * Math.PI);
-          ctx.fillStyle = snake.color;
-          ctx.fill();
-        }
-        
-        if (snake.username) {
-          const head = snake.segments && snake.segments.length > 0 ? snake.segments[0] : snake;
-          
-          ctx.font = 'bold 14px Arial';
-          ctx.textAlign = 'center';
-          
-          const textY = head.y - snakeRadius - 3;
-          
-          ctx.strokeStyle = 'black';
-          ctx.lineWidth = 3;
-          ctx.strokeText(snake.username, head.x, textY);
-          
-          ctx.fillStyle = 'white';
-          ctx.fillText(snake.username, head.x, textY);
-        }
-      });
+      // Draw other players
+      drawOtherPlayers(ctx);
 
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
+      if (wsRef.current?.readyState === WebSocket.OPEN && aliveRef.current) {
         wsRef.current.send(JSON.stringify({
           messageType: 'move',
           snake_x: segs[0].x,
@@ -238,28 +511,132 @@ export default function Game() {
           username: playerNameRef.current,
           segments: segs,
           length: lengthRef.current,
-          score: eatCountRef.current
+          score: eatCountRef.current,
+          alive: aliveRef.current
         }));
       }
 
       requestAnimationFrame(animate);
     };
+    
+    // Function to draw other players
+    const drawOtherPlayers = (ctx: CanvasRenderingContext2D) => {
+      otherPlayersRef.current.forEach(snake => {
+        // Dead snake particles
+        if (!snake.alive && snake.segments && snake.segments.length > 0) {
+          for (let i = 0; i < snake.segments.length; i += 3) {
+            const p = snake.segments[i];
+            if (isInViewport(p)) {
+              const canvasPos = worldToCanvas(p);
+              ctx.beginPath();
+              ctx.arc(canvasPos.x, canvasPos.y, snakeRadius * 0.3, 0, 2 * Math.PI);
+              ctx.fillStyle = snake.color;
+              ctx.fill();
+            }
+          }
+          return;
+        }
+        
+        // Living snake with segments
+        if (snake.segments && snake.segments.length > 0) {
+          let hasVisibleSegments = false;
+          
+          for (let i = snake.segments.length - 1; i >= 0; i--) {
+            const p = snake.segments[i];
+            if (isInViewport(p)) {
+              hasVisibleSegments = true;
+              const canvasPos = worldToCanvas(p);
+              const t = i / snake.segments.length;
+              const r = snakeRadius * (1 - 0.3 * t);
+              
+              ctx.beginPath();
+              ctx.arc(canvasPos.x, canvasPos.y, r, 0, 2 * Math.PI);
+              ctx.fillStyle = snake.color;
+              ctx.fill();
+            }
+          }
+          
+          // Only draw username if snake has visible segments
+          if (hasVisibleSegments && snake.username && snake.alive && snake.segments.length > 0) {
+            const head = snake.segments[0];
+            const headCanvasPos = worldToCanvas(head);
+            
+            if (isInViewport(head)) {
+              ctx.font = 'bold 14px Arial';
+              ctx.textAlign = 'center';
+              
+              const textY = headCanvasPos.y - snakeRadius - 3;
+              
+              ctx.strokeStyle = 'black';
+              ctx.lineWidth = 3;
+              ctx.strokeText(snake.username, headCanvasPos.x, textY);
+              
+              ctx.fillStyle = 'white';
+              ctx.fillText(snake.username, headCanvasPos.x, textY);
+            }
+          }
+        } 
+        // Single point snake (fallback)
+        else if (isInViewport(snake)) {
+          const canvasPos = worldToCanvas(snake);
+          ctx.beginPath();
+          ctx.arc(canvasPos.x, canvasPos.y, snakeRadius * 0.8, 0, 2 * Math.PI);
+          ctx.fillStyle = snake.color;
+          ctx.fill();
+          
+          if (snake.username && snake.alive) {
+            ctx.font = 'bold 14px Arial';
+            ctx.textAlign = 'center';
+            
+            const textY = canvasPos.y - snakeRadius - 3;
+            
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 3;
+            ctx.strokeText(snake.username, canvasPos.x, textY);
+            
+            ctx.fillStyle = 'white';
+            ctx.fillText(snake.username, canvasPos.x, textY);
+          }
+        }
+      });
+    };
+    
     animate();
+    
+    return () => {
+      window.removeEventListener('resize', resizeCanvas);
+      if (respawnTimerRef.current) {
+        clearTimeout(respawnTimerRef.current);
+      }
+    };
   }, []);
 
   // mouse move to update direction continuously
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
+    
     const onMouseMove = (e: MouseEvent) => {
-      // get current head position
+      if (!aliveRef.current) return; // Don't update direction if dead
+      
+      const rect = canvas.getBoundingClientRect();
+      // Get mouse position in canvas coordinates
+      const canvasMouseX = e.clientX - rect.left;
+      const canvasMouseY = e.clientY - rect.top;
+      
+      // Convert to world coordinates
+      const worldMousePos = canvasToWorld({ x: canvasMouseX, y: canvasMouseY });
+      
+      // Get current head position in world coordinates
       const head = segmentsRef.current[0];
-      const dx = (e.clientX - rect.left) - head.x;
-      const dy = (e.clientY - rect.top) - head.y;
+      const dx = worldMousePos.x - head.x;
+      const dy = worldMousePos.y - head.y;
       const dist = Math.hypot(dx, dy) || 1;
+      
+      // Update direction as a unit vector
       directionRef.current = { x: dx / dist, y: dy / dist };
     };
+    
     canvas.addEventListener('mousemove', onMouseMove);
     return () => canvas.removeEventListener('mousemove', onMouseMove);
   }, []);
@@ -279,7 +656,8 @@ export default function Game() {
           snake_x: head.x,
           snake_y: head.y,
           snake_color: snakeColorRef.current,
-          username: playerNameRef.current
+          username: playerNameRef.current,
+          alive: true
         }));
       };
       
@@ -293,13 +671,13 @@ export default function Game() {
           foodsRef.current = data.foods;
           
           otherPlayersRef.current = data.snakes.filter(
-            (snake: Snake) => snake.color !== snakeColorRef.current
+            (snake: Snake) => snake.id !== playerIdRef.current
           );
         }
         else if (data.messageType === 'snake_joined' || data.messageType === 'snake_update') {
           const snake = data.snake;
           
-          if (snake.color === snakeColorRef.current) return;
+          if (snake.id === playerIdRef.current) return;
           
           const idx = otherPlayersRef.current.findIndex(p => p.id === snake.id);
           
@@ -314,6 +692,20 @@ export default function Game() {
           otherPlayersRef.current = otherPlayersRef.current.filter(
             snake => snake.id !== snake_id
           );
+        }
+        else if (data.messageType === 'player_died') {
+          const snakeId = data.snake_id;
+          const idx = otherPlayersRef.current.findIndex(p => p.id === snakeId);
+          
+          if (idx >= 0) {
+            otherPlayersRef.current[idx].alive = false;
+            // Add death animation/particles here if desired
+          }
+          
+          // If death converted to food particles
+          if (data.food_particles && Array.isArray(data.food_particles)) {
+            foodsRef.current = [...foodsRef.current, ...data.food_particles];
+          }
         }
         else if (data.messageType === 'food_update') {
           const foodId = data.food_id;
@@ -421,6 +813,7 @@ export default function Game() {
           <div className="game-info">
             <div>Score: {score}</div>
             <div>Length: {snakeLengthState}</div>
+            {!isAlive && <div className="status-dead">DEAD</div>}
           </div>
           <canvas ref={canvasRef} />
         </div>

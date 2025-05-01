@@ -49,6 +49,8 @@
     background-color: #AF46A3;
     color: white;
     overflow-y: auto;
+    display: flex;
+    flex-direction: column;
   }
 
   .scoreboard-header {
@@ -62,6 +64,8 @@
 
   .player-list {
     padding: 1rem;
+    flex: 1;
+    overflow-y: auto;
   }
 
   .player-item {
@@ -71,6 +75,16 @@
   .game-area {
     flex: 1;
     background-color: white;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+
+  canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
   }
 
   .game-info {
@@ -83,4 +97,19 @@
     font-size: 0.9rem;
     line-height: 1.2;
     z-index: 10;
+    top: 10px;
+    right: 10px;
+  }
+
+  .status-dead {
+    font-weight: bold;
+    color: #FF3333;
+    margin-top: 5px;
+    font-size: 1.2rem;
+    animation: flash 1s infinite;
+  }
+
+  @keyframes flash {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
   }
