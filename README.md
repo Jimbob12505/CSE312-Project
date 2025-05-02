@@ -1,7 +1,7 @@
 # CSE312-Project
 
 ## Link to Public Deployment
-[wigglewars.me](https://wigglewars.me)
+[wigglewars.me](https://potato.cse312.dev/)
 
 ## Setup Instructions
 - create a new venv by ```python3 -m venv venv```
