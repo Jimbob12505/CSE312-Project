@@ -16,6 +16,7 @@ type Snake = {
   segments: Point[];
   length: number;
   score: number;
+  headImageUrl?: string;
 };
 
 
@@ -30,6 +31,8 @@ export default function Game() {
   const otherPlayersRef = useRef<Snake[]>([]);
   const [score, setScore]   = useState(0);
   const [snakeLengthState, setSnakeLengthState] = useState(1);
+  const [headImage, setHeadImage] = useState<HTMLImageElement | null>(null);
+  const imageCache: { [url: string]: HTMLImageElement } = {};
 
 
   const wsRef = useRef<WebSocket | null>(null);
@@ -68,6 +71,13 @@ export default function Game() {
           const userData = await response.json();
           setPlayerName(userData.username);
           playerNameRef.current = userData.username;
+
+          if (userData.headImageUrl) {
+            const img = new Image();
+            img.src = userData.headImageUrl;
+            img.onload = () => setHeadImage(img);
+        }
+
         } else {
           console.error('Failed to fetch user data');
           navigate('/login');
@@ -172,9 +182,15 @@ export default function Game() {
         const p = segs[i];
         const t = i / segs.length;
         const r = snakeRadius * (1 - 0.3 * t);
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, r, 0, 2 * Math.PI);
-        ctx.fill();
+        if (i === 0 && headImage) {
+          const imgSize = snakeRadius * 2;
+          ctx.drawImage(headImage, p.x - imgSize / 2, p.y - imgSize / 2, imgSize, imgSize);
+        } else {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, r, 0, 2 * Math.PI);
+          ctx.fillStyle = snakeColorRef.current;
+          ctx.fill();
+        }
       }
 
       // username on the snake head
@@ -199,19 +215,26 @@ export default function Game() {
             const p = snake.segments[i];
             const t = i / snake.segments.length;
             const r = snakeRadius * (1 - 0.3 * t);
-            
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, r, 0, 2 * Math.PI);
-            ctx.fillStyle = snake.color;
-            ctx.fill();
+
+            if (i === 0 && snake.headImageUrl) {
+              if (imageCache[snake.headImageUrl]) {
+                const img = imageCache[snake.headImageUrl];
+                ctx.drawImage(img, p.x - r, p.y - r, r * 2, r * 2);
+              } else {
+                const img = new Image();
+                img.src = snake.headImageUrl;
+                img.onload = () => {
+                  imageCache[snake.headImageUrl] = img;
+                };
+              }
+            } else {
+              ctx.beginPath();
+              ctx.arc(p.x, p.y, r, 0, 2 * Math.PI);
+              ctx.fillStyle = snake.color;
+              ctx.fill();
+            }
           }
-        } else {
-          ctx.beginPath();
-          ctx.arc(snake.x, snake.y, snakeRadius * 0.8, 0, 2 * Math.PI);
-          ctx.fillStyle = snake.color;
-          ctx.fill();
         }
-        
         if (snake.username) {
           const head = snake.segments && snake.segments.length > 0 ? snake.segments[0] : snake;
           

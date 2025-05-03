@@ -1,4 +1,5 @@
 import backend.paths.auth_paths as auth
+import backend.paths.avatar as avatar
 from flask import Flask, send_from_directory, request, jsonify, make_response, abort, Response
 import os
 import hashlib
@@ -110,6 +111,31 @@ def user_current():
         "username": user["username"],
         "id": user["id"]
     })
+
+@app.route("user/avatar", methods=["PUT"])
+def changeAvater():
+    return avatar.receive_avatar_request(request)
+
+
+@app.route('/user/avatar', methods=['GET'])
+def get_avatar():
+    # Ensure the user is authenticated
+    if "auth_token" not in request.cookies:
+        return Response("No authentication token", status=400)
+
+    auth_token = request.cookies["auth_token"]
+    hashed_auth = hashlib.sha256(auth_token.encode("utf-8")).hexdigest().encode("utf-8")
+
+    user = db.user_collection.find_one({"token": hashed_auth})
+    if not user:
+        return Response("User not found", status=404)
+
+    # Fetch the current avatar URL from the user's data
+    avatar_url = user.get("imageURL")
+    if avatar_url:
+        return jsonify({"imageURL": avatar_url})
+    else:
+        return Response("No avatar found", status=404)
 
 @app.route('/<path:path>')
 def serve_static(path):
