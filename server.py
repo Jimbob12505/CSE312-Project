@@ -6,6 +6,7 @@ import json
 import logging
 from flask_sock import Sock
 import database as db
+
 import threading
 import game_websocket as websocket
 
@@ -17,8 +18,8 @@ if os.path.exists(dist_dir):
 else:
     static_folder = dev_dir
 
-app = Flask(__name__, 
-            static_folder=static_folder, 
+app = Flask(__name__,
+            static_folder=static_folder,
             static_url_path='')
             
 # websocket
@@ -65,6 +66,15 @@ def game():
         res.headers["Location"] = "/login"
         return res
     return send_from_directory(app.static_folder, 'index.html')
+@app.route("/avatar")
+def avatar():
+    if (not ("auth_token" in request.cookies)):
+        # if not logged in, redirect to login page
+        res = Response()
+        res.status_code = 302
+        res.headers["Location"] = "/login"
+        return res
+    return send_from_directory(app.static_folder, 'index.html')
 
 @app.route("/logout")
 def logout():
@@ -92,6 +102,7 @@ def auth_register():
 @app.route("/auth/login", methods=["POST"])
 def auth_login():
     return auth.receive_login_credentials(request)
+
 
 @app.route("/auth/logout", methods=["GET"])
 def auth_logout():
