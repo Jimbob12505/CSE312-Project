@@ -113,6 +113,13 @@ export default function UploadAvatar() {
               <button type="submit" className="form-submit" style={{ marginTop: '1rem' }}>
                 Upload
               </button>
+              <button
+                type="button"
+                className="form-submit"
+                style={{ backgroundColor: '#ccc', color: '#000' }}
+                onClick={() => navigate('/game')}>
+                Continue to game
+              </button>
             </form>
           </div>
         </div>
