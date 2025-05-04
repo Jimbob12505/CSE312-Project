@@ -4,6 +4,7 @@ import Login from "./routes/login";
 import Register from "./routes/register";
 import Home from './routes/home';
 import Game from './routes/game';
+import Avatar from './routes/game';
 
 const router: RouteObject[] = [
   {
@@ -13,7 +14,8 @@ const router: RouteObject[] = [
       { index: true, element: <Home /> },
       { path: 'login', element: <Login /> },
       {path: 'register', element: <Register /> },
-      {path: 'game', element: <Game />}
+      {path: 'game', element: <Game />},
+      { path: "avatar", element: <Avatar /> }
     ]
   }
 ];
