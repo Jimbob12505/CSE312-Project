@@ -4,7 +4,7 @@ import Login from "./routes/login";
 import Register from "./routes/register";
 import Home from './routes/home';
 import Game from './routes/game';
-import Avatar from './routes/game';
+import Avatar from './routes/avatar';
 
 const router: RouteObject[] = [
   {
