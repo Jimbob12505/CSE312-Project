@@ -12,13 +12,13 @@ export default function UploadAvatar() {
   useEffect(() => {
     const fetchAvatar = async () => {
       try {
-        const response = await fetch('auth/avatar', {
+        const response = await fetch('/auth/avatar', {
           method: 'GET',
           credentials: 'include',
         });
         if (response.ok) {
-          const { url } = await response.json(); // Assuming backend returns { url: "..." }
-          setImageURL(url);
+          const { imageURL } = await response.json(); // Assuming backend returns { url: "..." }
+          setImageURL(imageURL);
         } else {
           console.error("Failed to load avatar");
         }
@@ -53,8 +53,8 @@ export default function UploadAvatar() {
       if (response.ok) {
         setSuccess("Avatar uploaded successfully.");
         // Re-fetch updated image
-        const updated = await response.json();
-        if (updated?.url) setImageURL(updated.url);
+        const { imageURL: updatedURL } = await response.json();
+        if (updatedURL) setImageURL(updatedURL);
       } else {
         const errorText = await response.text();
         setError(errorText || "Upload failed");
@@ -66,16 +66,13 @@ export default function UploadAvatar() {
     }
   };
 
-  return (
+    return (
     <div className="login-container">
       <div className="login-content">
         <h1 className="login-title">Upload Avatar</h1>
 
         <div className="form-container">
           <div className="form-content">
-            <div className="tab-container">
-              <Link to="/game" className="tab-button inactive">Back to Game</Link>
-            </div>
 
             {error && <div className="error-message">{error}</div>}
             {success && <div className="success-message">{success}</div>}
@@ -112,6 +109,14 @@ export default function UploadAvatar() {
 
               <button type="submit" className="form-submit" style={{ marginTop: '1rem' }}>
                 Upload
+              </button>
+              <br/>
+              <button
+                type="button"
+                className="form-submit"
+                style={{ backgroundColor: '#ccc', color: '#000' , marginTop: '1rem'}}
+                onClick={() => navigate('/game')}>
+                Continue to game
               </button>
             </form>
           </div>

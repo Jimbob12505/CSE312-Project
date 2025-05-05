@@ -169,7 +169,13 @@ def serve_static(path):
     
     log_request()
     return send_from_directory(app.static_folder, 'index.html')
-
+@app.route('/imgs/<path:filename>')
+def serve_avatar(filename):
+    # will serve files from <static_folder>/imgs
+    return send_from_directory(
+        os.path.join(app.static_folder, 'imgs'),
+        filename
+    )
 if __name__ == '__main__':
     websocket.init_game_system()
     app.run(host="0.0.0.0", port=8080, debug=True, threaded=True)

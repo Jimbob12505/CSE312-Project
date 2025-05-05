@@ -4,10 +4,11 @@ import bcrypt
 import pymongo
 import database as db
 import backend.tools.auth_tools as tools
-from flask import Request, Response
+from flask import Request, Response, jsonify
 from typing import *
 from werkzeug.utils import secure_filename
 import os
+from flask import current_app
 
 def receive_registration_credentials(req: Request) -> Response:
     res: Response = Response()
@@ -84,9 +85,9 @@ def receive_logout_request(req: Request) -> Response:
 
     return res
 
-def receive_avatar_request(req: Request) -> Response:
+def receive_avatar_request(req: Request):
     res: Response = Response()
-    IMG_DIR = os.path.join(os.getcwd(),'frontend', 'dist', 'imgs')
+    IMG_DIR = os.path.join(current_app.static_folder, 'imgs')
     os.makedirs(IMG_DIR, exist_ok=True)
 
     if "auth_token" not in req.cookies:
@@ -121,7 +122,5 @@ def receive_avatar_request(req: Request) -> Response:
     # Update DB with relative image URL
     update_operation = {"$set": {"imageURL": f"/imgs/{filename}"}}
     db.user_collection.update_one({"_id": user["_id"]}, update_operation)
-
-    res.status_code = 200
-    res.data = "Image uploaded and user updated"
-    return res
+    image_url = f"/imgs/{filename}"
+    return jsonify({"imageURL": image_url}), 200
