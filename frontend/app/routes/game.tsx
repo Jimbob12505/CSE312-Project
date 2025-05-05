@@ -115,12 +115,23 @@ export default function Game() {
   const avatarImgRef = useRef<HTMLImageElement>(new Image());
 
   useEffect(() => {
-    if (!avatarURL) return;
-    // when avatarURL changes, point the Image at it
     const img = avatarImgRef.current;
-    img.src = avatarURL;
-    // optional: handle onload if you need
-    img.onload = () => console.log("Avatar image loaded");
+    if (avatarURL) {
+      const newImg = new Image();
+      newImg.src = avatarURL;
+      newImg.onload = () => {
+        img.src = avatarURL;
+        console.log("Avatar image updated and loaded");
+      };
+      newImg.onerror = () => {
+        console.error(
+          "Failed to load avatar image, reverting to default color"
+        );
+        img.src = "";
+      };
+    } else {
+      img.src = ""; // Clear avatar if URL is null
+    }
   }, [avatarURL]);
 
   useEffect(() => {
@@ -136,18 +147,14 @@ export default function Game() {
           playerNameRef.current = userData.username;
           playerIdRef.current = userData.id;
 
-          if (!avatarURL) {
-            const avatarRes = await fetch("/user/avatar", {
-              method: "GET",
-              credentials: "include",
-            });
-            if (avatarRes.ok) {
-              // your Flask route returns { url: "/avatars/…png" }
-              const { url } = await avatarRes.json();
-              setAvatarURL(url);
-            }
+          const avatarRes = await fetch("/user/avatar", {
+            method: "GET",
+            credentials: "include",
+          });
+          if (avatarRes.ok) {
+            const { url } = await avatarRes.json();
+            setAvatarURL(url);
           }
-
           console.log(
             `User authenticated: ${userData.username}, ID: ${userData.id}`
           );
@@ -182,7 +189,34 @@ export default function Game() {
       clearInterval(saveInterval);
     };
   }, []);
+  // useEffect(() => {
+  //   const fetchAvatarPeriodically = async () => {
+  //     try {
+  //       const response = await fetch("/user/avatar", {
+  //         credentials: "include",
+  //       });
+  //       if (response.ok) {
+  //         const { url } = await response.json();
+  //         setAvatarURL((prevURL) => {
+  //           if (url !== prevURL) {
+  //             console.log("Avatar URL updated to:", url);
+  //             return url;
+  //           }
+  //           return prevURL;
+  //         });
+  //       }
+  //     } catch (error) {
+  //       console.error("Error fetching avatar periodically:", error);
+  //     }
+  //   };
 
+  //   const interval = setInterval(fetchAvatarPeriodically, 5000);
+
+  //   // Fetch immediately on mount as well
+  //   fetchAvatarPeriodically();
+
+  //   return () => clearInterval(interval);
+  // }, []);
   useEffect(() => {
     playerNameRef.current = playerName;
   }, [playerName]);
@@ -650,20 +684,25 @@ export default function Game() {
         const canvasPos = worldToCanvas(p);
         const t = i / segs.length;
         const r = snakeRadius * (1 - 0.3 * t);
-        if (i === 0 && avatarImgRef.current.complete) {
+        const headImg = avatarImgRef.current;
+        const hasAvatar =
+          headImg.src && headImg.complete && headImg.naturalWidth > 0;
+        if (i === 0 && hasAvatar) {
+          // draw avatar‐clipped head
           ctx.save();
           ctx.beginPath();
           ctx.arc(canvasPos.x, canvasPos.y, r, 0, 2 * Math.PI);
           ctx.clip();
           ctx.drawImage(
             avatarImgRef.current,
-            canvasPos.x - r, // top-left x
-            canvasPos.y - r, // top-left y
-            r * 2, // width
-            r * 2 // height
+            canvasPos.x - r,
+            canvasPos.y - r,
+            r * 2,
+            r * 2
           );
           ctx.restore();
         } else {
+          // draw default coloured segment (including head when no avatar)
           ctx.fillStyle = snakeColorRef.current;
           ctx.beginPath();
           ctx.arc(canvasPos.x, canvasPos.y, r, 0, 2 * Math.PI);
