@@ -12,7 +12,7 @@ export default function UploadAvatar() {
   useEffect(() => {
     const fetchAvatar = async () => {
       try {
-        const response = await fetch('/user/avatar', {
+        const response = await fetch('auth/avatar', {
           method: 'GET',
           credentials: 'include',
         });
@@ -44,7 +44,7 @@ export default function UploadAvatar() {
     formData.append("image", image);
 
     try {
-      const response = await fetch('/user/avatar', {
+      const response = await fetch('/auth/avatar', {
         method: 'PUT',
         credentials: 'include',
         body: formData,
@@ -74,7 +74,7 @@ export default function UploadAvatar() {
         <div className="form-container">
           <div className="form-content">
             <div className="tab-container">
-              <Link to="/game" className="tab-button inactive">Back</Link>
+              <Link to="/game" className="tab-button inactive">Back to Game</Link>
             </div>
 
             {error && <div className="error-message">{error}</div>}

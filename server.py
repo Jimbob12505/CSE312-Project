@@ -9,6 +9,7 @@ import database as db
 
 import threading
 import game_websocket as websocket
+from backend.paths.auth_paths import receive_avatar_request
 
 dist_dir = os.path.join('frontend', 'dist')
 dev_dir = os.path.join('frontend', 'app')
@@ -103,6 +104,28 @@ def auth_register():
 def auth_login():
     return auth.receive_login_credentials(request)
 
+@app.route("/auth/avatar", methods=["PUT"])
+def auth_avatar():
+    return receive_avatar_request(request)
+@app.route('/auth/avatar', methods=['GET'])
+def get_avatar():
+    # Ensure the user is authenticated
+    if "auth_token" not in request.cookies:
+        return Response("No authentication token", status=400)
+
+    auth_token = request.cookies["auth_token"]
+    hashed_auth = hashlib.sha256(auth_token.encode("utf-8")).hexdigest().encode("utf-8")
+
+    user = db.user_collection.find_one({"token": hashed_auth})
+    if not user:
+        return Response("User not found", status=404)
+
+    # Fetch the current avatar URL from the user's data
+    avatar_url = user.get("imageURL")
+    if avatar_url:
+        return jsonify({"imageURL": avatar_url})
+    else:
+        return Response("No avatar found", status=404)
 
 @app.route("/auth/logout", methods=["GET"])
 def auth_logout():
