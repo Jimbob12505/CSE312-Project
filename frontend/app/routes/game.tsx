@@ -42,6 +42,7 @@ export default function Game() {
   const [score, setScore]   = useState(0);
   const [snakeLengthState, setSnakeLengthState] = useState(1);
   const [isAlive, setIsAlive] = useState(true);
+  const [avatarURL, setAvatarURL] = useState<string|null>(null);
 
   // Camera tracking
   const cameraRef = useRef<Point>({ x: 0, y: 0 });
@@ -106,6 +107,16 @@ export default function Game() {
   const sendInterval = 50; // Limit to 50ms per update, about 20fps
   const sendPositionThreshold = 5; // Only send update if moved more than 5px
   const lastSentPos = useRef<Point | null>(null);
+  const avatarImgRef = useRef<HTMLImageElement>(new Image());
+
+useEffect(() => {
+  if (!avatarURL) return;
+  // when avatarURL changes, point the Image at it
+  const img = avatarImgRef.current;
+  img.src = avatarURL;
+  // optional: handle onload if you need
+  img.onload = () => console.log("Avatar image loaded");
+}, [avatarURL]);
 
   useEffect(() => {
     const fetchCurrentUser = async () => {
@@ -119,6 +130,15 @@ export default function Game() {
           setPlayerName(userData.username);
           playerNameRef.current = userData.username;
           playerIdRef.current = userData.id;
+
+          const avatarRes = await fetch('/auth/avatar', {
+            method: 'GET',
+            credentials: 'include'
+          });
+          if (avatarRes.ok) {
+            const { imageURL } = await avatarRes.json();
+            setAvatarURL(imageURL);
+          }
           
           console.log(`User authenticated: ${userData.username}, ID: ${userData.id}`);
           
@@ -555,9 +575,26 @@ export default function Game() {
         const canvasPos = worldToCanvas(p);
         const t = i / segs.length;
         const r = snakeRadius * (1 - 0.3 * t);
-        ctx.beginPath();
-        ctx.arc(canvasPos.x, canvasPos.y, r, 0, 2 * Math.PI);
-        ctx.fill();
+
+         if (i === 0 && avatarImgRef.current.complete) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(canvasPos.x, canvasPos.y, r, 0, 2 * Math.PI);
+            ctx.clip();
+            ctx.drawImage(
+            avatarImgRef.current,
+            canvasPos.x - r,      // top-left x
+            canvasPos.y - r,      // top-left y
+            r * 2,                // width
+            r * 2                 // height
+            );
+            ctx.restore();
+         }else{
+           ctx.fillStyle = snakeColorRef.current;
+           ctx.beginPath();
+           ctx.arc(canvasPos.x, canvasPos.y, r, 0, 2 * Math.PI);
+           ctx.fill();
+         }
       }
 
       // username on the snake head
@@ -943,7 +980,23 @@ export default function Game() {
       {/* Header/Navbar */}
       <header className="navbar">
         {/* 左侧头像 */}
-        <div className="avatar"></div>
+        <div className="avatar" role="button"
+          tabIndex={0}
+          aria-label="Change avatar"
+          onClick={() => navigate('/avatar')}
+          onKeyDown={e => { if (e.key === 'Enter') navigate('/avatar') }}
+          style={{ cursor: 'pointer' }}>{avatarURL && (
+    <img
+      src={avatarURL}
+      alt="avatar"
+      style={{
+        width: '100%',
+        height: '100%',
+        objectFit: 'cover',
+        borderRadius: '50%'
+      }}
+    />
+  )}</div>
 
         {/* 中间玩家名称 */}
         <h1 className="player-name">Hello {playerName}</h1>

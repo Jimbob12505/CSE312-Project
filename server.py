@@ -6,8 +6,10 @@ import json
 import logging
 from flask_sock import Sock
 import database as db
+
 import threading
 import game_websocket as websocket
+from backend.paths.auth_paths import receive_avatar_request
 
 dist_dir = os.path.join('frontend', 'dist')
 dev_dir = os.path.join('frontend', 'app')
@@ -17,8 +19,8 @@ if os.path.exists(dist_dir):
 else:
     static_folder = dev_dir
 
-app = Flask(__name__, 
-            static_folder=static_folder, 
+app = Flask(__name__,
+            static_folder=static_folder,
             static_url_path='')
             
 # websocket
@@ -65,6 +67,15 @@ def game():
         res.headers["Location"] = "/login"
         return res
     return send_from_directory(app.static_folder, 'index.html')
+@app.route("/avatar")
+def avatar():
+    if (not ("auth_token" in request.cookies)):
+        # if not logged in, redirect to login page
+        res = Response()
+        res.status_code = 302
+        res.headers["Location"] = "/login"
+        return res
+    return send_from_directory(app.static_folder, 'index.html')
 
 @app.route("/profile")
 def profile():
@@ -102,6 +113,29 @@ def auth_register():
 @app.route("/auth/login", methods=["POST"])
 def auth_login():
     return auth.receive_login_credentials(request)
+
+@app.route("/auth/avatar", methods=["PUT"])
+def auth_avatar():
+    return receive_avatar_request(request)
+@app.route('/auth/avatar', methods=['GET'])
+def get_avatar():
+    # Ensure the user is authenticated
+    if "auth_token" not in request.cookies:
+        return Response("No authentication token", status=400)
+
+    auth_token = request.cookies["auth_token"]
+    hashed_auth = hashlib.sha256(auth_token.encode("utf-8")).hexdigest().encode("utf-8")
+
+    user = db.user_collection.find_one({"token": hashed_auth})
+    if not user:
+        return Response("User not found", status=404)
+
+    # Fetch the current avatar URL from the user's data
+    avatar_url = user.get("imageURL")
+    if avatar_url:
+        return jsonify({"imageURL": avatar_url})
+    else:
+        return Response("No avatar found", status=404)
 
 @app.route("/auth/logout", methods=["GET"])
 def auth_logout():
@@ -343,7 +377,13 @@ def serve_static(path):
     
     log_request()
     return send_from_directory(app.static_folder, 'index.html')
-
+@app.route('/imgs/<path:filename>')
+def serve_avatar(filename):
+    # will serve files from <static_folder>/imgs
+    return send_from_directory(
+        os.path.join(app.static_folder, 'imgs'),
+        filename
+    )
 if __name__ == '__main__':
     websocket.init_game_system()
     app.run(host="0.0.0.0", port=8080, debug=True, threaded=True)

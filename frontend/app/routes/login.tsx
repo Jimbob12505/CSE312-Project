@@ -26,7 +26,7 @@ export default function Login() {
       
       if (response.ok) {
         console.log('Login successful');
-        navigate('/game');
+        navigate('/avatar');
       } else {
         const errorText = await response.text();
         if (errorText === "Username does not exist") {
