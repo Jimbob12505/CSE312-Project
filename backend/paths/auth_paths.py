@@ -4,7 +4,7 @@ import bcrypt
 import pymongo
 import database as db
 import backend.tools.auth_tools as tools
-from flask import Request, Response
+from flask import Request, Response, current_app
 from typing import *
 
 def receive_registration_credentials(req: Request) -> Response:
@@ -13,14 +13,21 @@ def receive_registration_credentials(req: Request) -> Response:
     username: str = req.form.get("username")
     password: str = req.form.get("password")
 
+    current_app.logger.info("Registration attempt for username=%s", username)
+
     user: (Mapping[str, Any] | None) = db.user_collection.find_one({"username": username})
 
     if(not(user is None)):
         res.status_code = 400
         res.data = "Username taken"
+
+        current_app.logger.info("Registration failed for %s: %s", username, res.data)
+
     elif(not(tools.validate_password(password))):
         res.status_code = 400
         res.data = "Password invalid"
+        current_app.logger.info("Registration failed for %s: %s", username, res.data)
+
     else:
         hashed: bytes = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt())
         user_id: str = str(uuid.uuid4())
@@ -30,6 +37,7 @@ def receive_registration_credentials(req: Request) -> Response:
         db.user_collection.insert_one({"id": user_id, "username": username, "password": hashed, "token": hashed_auth})
         res.status_code = 200
         res.data = "Registration successful"
+        current_app.logger.info("Registration successful for %s", username)
 
     return res
 
@@ -39,14 +47,18 @@ def receive_login_credentials(req: Request) -> Response:
     username: str = req.form.get("username")
     password: str = req.form.get("password")
 
+    current_app.logger.info("Login attempt for username=%s", username)
+
     user: (Mapping[str, (str | bytes)] | None) = db.user_collection.find_one({"username": username})
 
     if(user is None):
         res.status_code = 400
         res.data = "Username does not exist"
+        current_app.logger.info("Login failed for %s: %s", username, res.data)
     elif(not(bcrypt.checkpw(password.encode("utf-8"), user["password"]))):
         res.status_code = 400
         res.data = "Password does not match"
+        current_app.logger.info("Login failed for %s: %s", username, res.data)
     else:
         auth_token: str = str(uuid.uuid4())
         res.set_cookie("auth_token", auth_token, max_age=20000000, secure=True, httponly=True)
@@ -55,6 +67,7 @@ def receive_login_credentials(req: Request) -> Response:
         db.user_collection.update_one(user, update_operation)
         res.status_code = 200
         res.data = "Login successful"
+        current_app.logger.info("Login successful for %s", username)
 
     return res
 

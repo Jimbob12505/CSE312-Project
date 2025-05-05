@@ -1,5 +1,5 @@
 import backend.paths.auth_paths as auth
-from flask import Flask, send_from_directory, request, jsonify, make_response, abort, Response
+from flask import Flask, g, send_from_directory, request, jsonify, make_response, abort, Response
 import os
 import hashlib
 import json
@@ -8,6 +8,8 @@ from flask_sock import Sock
 import database as db
 import threading
 import game_websocket as websocket
+from logging.handlers import RotatingFileHandler
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 dist_dir = os.path.join('frontend', 'dist')
 dev_dir = os.path.join('frontend', 'app')
@@ -17,17 +19,160 @@ if os.path.exists(dist_dir):
 else:
     static_folder = dev_dir
 
+class ExceptionLoggingFlask(Flask):
+    def wsgi_app(self, environ, start_response):
+        try:
+            return super(ExceptionLoggingFlask, self).wsgi_app(environ, start_response)
+        except Exception:
+            # logs full stack trace to app.logger
+            self.logger.error("Unhandled Exception:\n%s", traceback.format_exc())
+            raise
+
 app = Flask(__name__, 
-            static_folder=static_folder, 
-            static_url_path='')
-            
+            static_folder=static_folder)
+
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 # websocket
 sock = Sock(app)
 
-handler = logging.FileHandler("/logs/requests.log")
-handler.setFormatter(logging.Formatter("%(asctime)s - %(message)s"))
-app.logger.addHandler(handler)
+# set up a rotating file handler on app.logger
+handler = RotatingFileHandler('requests.log', maxBytes=10_000_000, backupCount=5)
+handler.setFormatter(
+    logging.Formatter('%(asctime)s  %(levelname)s  %(message)s')
+)
+handler.setLevel(logging.INFO)
 app.logger.setLevel(logging.INFO)
+app.logger.addHandler(handler)
+
+raw_handler = RotatingFileHandler(
+    "requests_raw.log", maxBytes=10_000_000, backupCount=5
+)
+raw_handler.setLevel(logging.INFO)
+raw_handler.setFormatter(logging.Formatter("%(asctime)s  %(message)s"))
+
+raw_logger = logging.getLogger("raw_logger")
+raw_logger.setLevel(logging.INFO)
+raw_logger.addHandler(raw_handler)
+
+def sanitize_headers(headers):
+    cleaned = {}
+    for name, value in headers.items():
+        n = name.lower()
+        if n == "authorization":
+            cleaned[name] = "[REDACTED]"
+        elif n == "cookie":
+            # drop only auth_token from the cookie string
+            parts = []
+            for c in value.split("; "):
+                if c.startswith("auth_token="):
+                    continue
+                parts.append(c)
+            cleaned[name] = "; ".join(parts)
+        else:
+            cleaned[name] = value
+    return cleaned
+
+@app.before_request
+def log_raw_request():
+    headers = sanitize_headers(request.headers)
+    path = request.path
+    method = request.method
+
+    # For login/register, only log headers (no body)
+    if path in ("/auth/login", "/auth/register"):
+        raw_logger.info("REQUEST  %s %s\nHeaders: %s",
+                        method, path, headers)
+        return
+
+    ctype = request.content_type or ""
+    # Only log body if it’s text or JSON or form-urlencoded
+    if any(ctype.startswith(t) for t in ("text/",)) \
+       or "application/json" in ctype \
+       or "application/x-www-form-urlencoded" in ctype:
+        data = request.get_data()[:2048]  # truncate at 2 KiB
+        raw_logger.info(
+            "REQUEST  %s %s\nHeaders: %s\nBody: %r",
+            method, path, headers, data
+        )
+    else:
+        raw_logger.info("REQUEST  %s %s\nHeaders: %s",
+                        method, path, headers)
+
+@app.after_request
+def log_raw_response(response):
+    headers = sanitize_headers(response.headers)
+    method = request.method
+    path = request.path
+    status = response.status_code
+
+    # 1) If it’s a streamed/direct_passthrough response, only log headers
+    if getattr(response, "direct_passthrough", False):
+        raw_logger.info(
+            "RESPONSE %s %s → %s\nHeaders: %s\n[streamed body omitted]",
+            method, path, status, headers
+        )
+        return response
+
+    # 2) Special-case auth endpoints (no bodies)
+    if path in ("/auth/login", "/auth/register"):
+        raw_logger.info(
+            "RESPONSE %s %s → %s\nHeaders: %s",
+            method, path, status, headers
+        )
+        return response
+
+    # 3) Otherwise, for JSON/text responses, truncate at 2 KiB
+    ctype = response.content_type or ""
+    if ("application/json" in ctype) or ctype.startswith("text/"):
+        body = response.get_data()[:2048]
+        raw_logger.info(
+            "RESPONSE %s %s → %s\nHeaders: %s\nBody: %r",
+            method, path, status, headers, body
+        )
+    else:
+        # binary or other unlogged body types
+        raw_logger.info(
+            "RESPONSE %s %s → %s\nHeaders: %s\n[non-text body omitted]",
+            method, path, status, headers
+        )
+
+    return response
+
+
+def _get_current_username():
+    token = request.cookies.get("auth_token")
+    if not token:
+        return None
+    hashed = hashlib.sha256(token.encode()).digest()
+    user = db.user_collection.find_one({"token": hashed})
+    return user["username"] if user else None
+
+
+@app.before_request
+def attach_username_to_g():
+    #g.username = _get_current_username()
+    g.username = None
+    token = request.cookies.get("auth_token")
+    if token:
+        # must match how you store it in Mongo:
+        hashed = hashlib.sha256(token.encode("utf-8")).hexdigest().encode("utf-8")
+        user = db.user_collection.find_one({"token": hashed})
+        if user:
+            g.username = user["username"]
+
+
+@app.after_request
+def log_request_and_response(response):
+    username = g.get("username") or "anonymous"
+    app.logger.info(
+        "%s  %s  %s %s → %s",
+        request.remote_addr,
+        username,
+        request.method,
+        request.path,
+        response.status_code
+    )
+    return response
 
 @app.errorhandler(500)
 def handle_server_error(e):
