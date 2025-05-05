@@ -95,3 +95,47 @@
   .form-submit:hover {
     background-color: #24D2F9;
   }
+
+  .error-message {
+    color: #e53e3e;
+    margin-bottom: 1rem;
+    padding: 0.5rem;
+    background-color: #fff5f5;
+    border-radius: 0.25rem;
+    border-left: 4px solid #f56565;
+  }
+
+  /* Dark Mode Styles */
+  @media (prefers-color-scheme: dark) {
+    .form-container {
+      background-color: #2d3748;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+    }
+    
+    .form-field-label {
+      color: #e2e8f0;
+    }
+    
+    .form-input {
+      background-color: #4a5568;
+      border-color: #4a5568;
+      color: #e2e8f0;
+    }
+    
+    .form-input::placeholder {
+      color: #a0aec0;
+    }
+    
+    .tab-button.inactive {
+      color: #cbd5e0;
+    }
+    
+    .tab-container {
+      border-bottom-color: #4a5568;
+    }
+    
+    .error-message {
+      background-color: rgba(229, 62, 62, 0.1);
+      color: #fc8181;
+    }
+  }

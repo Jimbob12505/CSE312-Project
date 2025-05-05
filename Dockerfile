@@ -20,7 +20,6 @@ COPY ./backend ./backend
 
 RUN apt update
 
-
 RUN pip3 install -r requirements.txt
 
 EXPOSE 8080
