@@ -91,6 +91,10 @@ export default function Game() {
   const deathTimeRef = useRef<number | null>(null);
   // Respawn timer
   const respawnTimerRef = useRef<number | null>(null);
+  // Start time of the current game session
+  const gameStartTimeRef = useRef<number>(Date.now());
+  // Kill count
+  const killCountRef = useRef<number>(0);
 
   // Added WebSocket reconnection counter
   const reconnectCount = useRef<number>(0);
@@ -135,6 +139,16 @@ export default function Game() {
     };
 
     fetchCurrentUser();
+    
+    // Reset game start time when starting a new game
+    gameStartTimeRef.current = Date.now();
+    
+    // Save game data periodically
+    const saveInterval = setInterval(saveGameData, 5000);
+    
+    return () => {
+      clearInterval(saveInterval);
+    };
   }, []);
 
   useEffect(() => {
@@ -196,6 +210,18 @@ export default function Game() {
     }
   };
 
+  // Function to save current game data to sessionStorage
+  const saveGameData = () => {
+    const gameData = {
+      score: eatCountRef.current,
+      length: lengthRef.current,
+      startTime: gameStartTimeRef.current,
+      foodEaten: eatCountRef.current,
+      kills: killCountRef.current
+    };
+    sessionStorage.setItem('gameData', JSON.stringify(gameData));
+  };
+
   // Function to handle player death
   const handleDeath = () => {
     if (!aliveRef.current) return; // Don't handle death multiple times
@@ -203,6 +229,9 @@ export default function Game() {
     aliveRef.current = false;
     setIsAlive(false);
     deathTimeRef.current = Date.now();
+    
+    // Save final game stats before processing death
+    saveGameData();
     
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({
@@ -248,6 +277,10 @@ export default function Game() {
     aliveRef.current = true;
     setIsAlive(true);
     deathTimeRef.current = null;
+    
+    // Reset game start time and kill count for new session
+    gameStartTimeRef.current = Date.now();
+    killCountRef.current = 0;
     
     // Send respawn event to server
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -790,6 +823,19 @@ export default function Game() {
         const idx = otherPlayersRef.current.findIndex(p => p.id === snakeId);
         
         if (idx >= 0) {
+          // Check if we killed the player (if head is near their head)
+          const ourHead = segmentsRef.current[0];
+          const theirHead = otherPlayersRef.current[idx].segments[0];
+          
+          if (ourHead && theirHead) {
+            const distance = Math.hypot(ourHead.x - theirHead.x, ourHead.y - theirHead.y);
+            if (distance < collisionDistance * 2) {
+              // It's likely we killed them, increment kill count
+              killCountRef.current++;
+              saveGameData(); // Save the updated stats
+            }
+          }
+          
           otherPlayersRef.current[idx].alive = false;
           // Add death animation/particles here if desired
         }
@@ -874,6 +920,9 @@ export default function Game() {
 
   const handleLogout = async () => {
     try {
+      // Save game data before logging out
+      saveGameData();
+      
       const response = await fetch('/auth/logout', {
         method: 'GET',
       });
@@ -882,10 +931,10 @@ export default function Game() {
         // Silent failure
       }
 
-      navigate('/login');
+      window.location.href = '/login';
     }
     catch (error) {
-      navigate('/login');
+      window.location.href = '/login';
     }
   };
 
@@ -899,10 +948,23 @@ export default function Game() {
         {/* 中间玩家名称 */}
         <h1 className="player-name">Hello {playerName}</h1>
 
-        {/* 右侧登录按钮 */}
-        <button onClick={handleLogout} className="sign-in-button">
-          Logout
-        </button>
+        {/* Right buttons */}
+        <div className="navbar-buttons">
+          {/* Profile button */}
+          <button 
+            onClick={() => {
+              saveGameData();
+              navigate('/profile');
+            }} 
+            className="profile-button">
+            Profile
+          </button>
+          
+          {/* 登录按钮 */}
+          <button onClick={handleLogout} className="sign-in-button">
+            Logout
+          </button>
+        </div>
       </header>
 
       {/* Game Content */}
