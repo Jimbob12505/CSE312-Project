@@ -72,6 +72,11 @@ def sanitize_headers(headers):
             cleaned[name] = value
     return cleaned
 
+@app.after_request
+def nosniff(response):
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
+
 @app.before_request
 def log_raw_request():
     headers = sanitize_headers(request.headers)
