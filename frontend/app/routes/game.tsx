@@ -653,7 +653,7 @@ export default function Game() {
           eatCountRef.current += 1;
           setScore(eatCountRef.current);
           // grow one circle when eatCount is multiple of 3
-          if (eatCountRef.current % 3 === 0) {
+          if (eatCountRef.current % 5 === 0) {
             lengthRef.current += 1;
             setSnakeLengthState(lengthRef.current);
           }
